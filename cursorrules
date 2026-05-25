@@ -1,0 +1,50 @@
+# AI Reconciliation Engine - Cursor Rules
+
+## Project Context
+Financial reconciliation tool. Next.js 14 App Router + TypeScript + Tailwind + OpenAI API.
+Users upload 2 CSVs (bank statement + ledger), AI matches transactions, humans review uncertain matches, export report.
+
+## Code Style
+- TypeScript strict mode. No `any` types — define interfaces in lib/types.ts
+- Functional components only. No class components.
+- Use server components by default. Add "use client" only when needed (interactivity, useState, event handlers).
+- API routes in app/api/ using Route Handlers (export async function POST/GET)
+- Use async/await, never .then() chains
+- Error handling: try/catch in API routes, return NextResponse.json with proper status codes
+- File naming: kebab-case for files, PascalCase for components
+
+## Architecture Rules
+- All OpenAI calls happen server-side in API routes. Never expose API keys to client.
+- Matching logic lives in lib/matcher.ts — pure functions, no side effects, fully testable.
+- Components are presentational. Data fetching happens via fetch() to API routes.
+- No database. All state lives in React state during the session. This is an MVP.
+- No external state management library. useState and useReducer are sufficient.
+
+## UI/Design Rules
+- Tailwind CSS only. No CSS modules, no styled-components.
+- Dark theme: bg-slate-950, bg-slate-900 for cards, text-slate-100 for primary text
+- Accent colors: sky-400 (primary), emerald-500 (success/matched), amber-500 (review), red-500 (unmatched)
+- Confidence badges: green (>90%), amber (70-90%), red (<70%)
+- Tables must be responsive. Use overflow-x-auto wrapper.
+- All amounts display with PKR currency format and thousand separators.
+
+## OpenAI Integration
+- Model: gpt-4o-mini (fast + cheap for batch comparisons)
+- Send transaction pairs in batches of 10-20 to minimize API calls
+- Prompt should return JSON with confidence score (0-100) and match reasoning
+- Temperature: 0 (deterministic for financial data)
+- Always include a system prompt explaining the reconciliation context
+
+## CSV Data Format Expected
+Bank statement columns: Date, Description, Debit, Credit, Balance, Reference
+Ledger columns: Date, Description, Amount, Type (debit/credit), Reference, Invoice_No
+
+## Testing
+- Test matching logic with known inputs/outputs
+- Include edge cases: partial amounts, date offsets, name variations, duplicates
+- Sample data in /data folder for manual testing
+
+## Git
+- Never commit .env.local or any file containing API keys
+- .env.example must list all required vars with placeholder values
+- Meaningful commit messages: "feat: add fuzzy matching engine" not "update"

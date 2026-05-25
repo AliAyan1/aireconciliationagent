@@ -1,0 +1,11 @@
+Date,Description,Amount,Type,Reference,Invoice_No
+2026-05-01,Employee Salary Disbursement,250000,credit,REF001,INV-101
+2026-05-02,Electricity Utility Payment,4500,debit,REF002,INV-102
+2026-05-03,Muhammad Ahmed Consulting Fee,15000,debit,REF003,INV-103
+2026-05-04,Monthly Office Rent,85000,debit,REF004,INV-104
+2026-05-05,Invoice Payment Client ABC Corp,185000,credit,REF005,INV-105
+2026-05-06,Office Supplies Purchase,3200,debit,REF006,INV-106
+2026-05-07,Vendor XYZ Payment,42000,debit,REF007,INV-107
+2026-05-08,Supplier Co Transfer,28500,debit,REF008,INV-108
+2026-05-09,Vehicle Fuel,6800,debit,REF009,INV-109
+2026-05-10,Professional Services Income,95000,credit,REF010,INV-110
