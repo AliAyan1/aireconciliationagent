@@ -7,7 +7,7 @@ export function DashboardPreview() {
           <span className="h-3 w-3 rounded-full bg-red-500/80" />
           <span className="h-3 w-3 rounded-full bg-amber-500/80" />
           <span className="h-3 w-3 rounded-full bg-emerald-500/80" />
-          <span className="ml-2 text-xs text-slate-500">Reconciliation Dashboard</span>
+          <span className="ml-2 text-xs text-slate-500">HisaabAI Dashboard</span>
         </div>
         <div className="grid grid-cols-4 gap-2 p-4">
           {[

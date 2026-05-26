@@ -225,3 +225,246 @@ export function getSummary(
     difference: totalBankAmount - totalLedgerAmount,
   };
 }
+
+// ─── Phase 5: AI scoring candidates ─────────────────────────────────
+
+const AI_AMOUNT_TOLERANCE = 2000;
+const AI_DATE_TOLERANCE_DAYS = 5;
+const MAX_AI_CANDIDATES = 30;
+
+export interface AIScoringCandidate {
+  id: string;
+  bankDesc: string;
+  bankAmount: number;
+  bankDate: string;
+  ledgerDesc: string;
+  ledgerAmount: number;
+  ledgerDate: string;
+}
+
+type CandidateWithSort = AIScoringCandidate & { amountDiff: number };
+
+export function crossMatchCandidateId(
+  bankId: string,
+  ledgerId: string
+): string {
+  return `ai-cross__${bankId}__${ledgerId}`;
+}
+
+function parseCrossMatchCandidateId(
+  id: string
+): { bankId: string; ledgerId: string } | null {
+  if (!id.startsWith("ai-cross__")) return null;
+  const parts = id.split("__");
+  if (parts.length !== 3) return null;
+  return { bankId: parts[1], ledgerId: parts[2] };
+}
+
+export function getAIScoringCandidates(
+  results: MatchResult[]
+): AIScoringCandidate[] {
+  const candidates: CandidateWithSort[] = [];
+
+  for (const r of results) {
+    if (r.status !== "review") continue;
+    const bank = r.bankTransaction;
+    const ledger = r.ledgerEntry;
+    if (!bank || !ledger) continue;
+
+    candidates.push({
+      id: r.id,
+      bankDesc: bank.description,
+      bankAmount: bank.amount,
+      bankDate: bank.date,
+      ledgerDesc: ledger.description,
+      ledgerAmount: ledger.amount,
+      ledgerDate: ledger.date,
+      amountDiff: Math.abs(bank.amount - ledger.amount),
+    });
+  }
+
+  const unmatchedBank = results.filter(
+    (r) =>
+      r.status === "unmatched" && r.bankTransaction && !r.ledgerEntry
+  );
+  const unmatchedLedger = results.filter(
+    (r) =>
+      r.status === "unmatched" && r.ledgerEntry && !r.bankTransaction
+  );
+
+  for (const bankResult of unmatchedBank) {
+    const bank = bankResult.bankTransaction!;
+
+    let bestLedger: LedgerEntry | null = null;
+    let bestAmountDiff = Infinity;
+
+    for (const ledgerResult of unmatchedLedger) {
+      const ledger = ledgerResult.ledgerEntry!;
+      if (bank.type !== ledger.type) continue;
+
+      const amountDiff = Math.abs(bank.amount - ledger.amount);
+      if (amountDiff > AI_AMOUNT_TOLERANCE) continue;
+
+      const days = daysDifference(bank.date, ledger.date);
+      if (days > AI_DATE_TOLERANCE_DAYS) continue;
+
+      if (amountDiff < bestAmountDiff) {
+        bestAmountDiff = amountDiff;
+        bestLedger = ledger;
+      }
+    }
+
+    if (bestLedger) {
+      candidates.push({
+        id: crossMatchCandidateId(bank.id, bestLedger.id),
+        bankDesc: bank.description,
+        bankAmount: bank.amount,
+        bankDate: bank.date,
+        ledgerDesc: bestLedger.description,
+        ledgerAmount: bestLedger.amount,
+        ledgerDate: bestLedger.date,
+        amountDiff: bestAmountDiff,
+      });
+    }
+  }
+
+  candidates.sort((a, b) => a.amountDiff - b.amountDiff);
+  return candidates.slice(0, MAX_AI_CANDIDATES).map((c) => ({
+    id: c.id,
+    bankDesc: c.bankDesc,
+    bankAmount: c.bankAmount,
+    bankDate: c.bankDate,
+    ledgerDesc: c.ledgerDesc,
+    ledgerAmount: c.ledgerAmount,
+    ledgerDate: c.ledgerDate,
+  }));
+}
+
+function statusFromAIConfidence(confidence: number): MatchResult["status"] {
+  if (confidence >= 90) return "auto_matched";
+  if (confidence >= 70) return "review";
+  return "unmatched";
+}
+
+/** When AI rejects a pair (<70), split linked rows so Unmatched UI lists them correctly. */
+function splitRejectedPair(
+  match: MatchResult,
+  score: { confidence: number; reasoning: string },
+  scoredAt: string
+): MatchResult[] {
+  const bank = match.bankTransaction;
+  const ledger = match.ledgerEntry;
+  const meta: MatchResult["aiMetadata"] = {
+    aiScored: true,
+    aiConfidence: score.confidence,
+    aiReasoning: score.reasoning,
+    scoredAt,
+  };
+  if (!bank || !ledger) {
+    return [
+      {
+        ...match,
+        confidence: 0,
+        status: "unmatched",
+        matchType: "unmatched",
+        matchReason: `AI: ${score.reasoning}`,
+        aiMetadata: meta,
+      },
+    ];
+  }
+  const reason = `AI: ${score.reasoning}`;
+  return [
+    { ...createMatch(bank, null, 0, "unmatched", "unmatched", reason), aiMetadata: meta },
+    { ...createMatch(null, ledger, 0, "unmatched", "unmatched", reason), aiMetadata: meta },
+  ];
+}
+
+function applyScoreToMatch(
+  match: MatchResult,
+  score: { confidence: number; reasoning: string },
+  scoredAt: string
+): MatchResult | MatchResult[] {
+  const status = statusFromAIConfidence(score.confidence);
+  if (status === "unmatched" && match.bankTransaction && match.ledgerEntry) {
+    return splitRejectedPair(match, score, scoredAt);
+  }
+  return {
+    ...match,
+    confidence: score.confidence,
+    status,
+    matchType: "ai_scored",
+    matchReason: `AI: ${score.reasoning}`,
+    aiMetadata: {
+      aiScored: true,
+      aiConfidence: score.confidence,
+      aiReasoning: score.reasoning,
+      scoredAt,
+    },
+  };
+}
+
+export function applyAIScores(
+  results: MatchResult[],
+  aiScores: Array<{ id: string; confidence: number; reasoning: string }>
+): MatchResult[] {
+  if (aiScores.length === 0) return results;
+
+  const scoreMap = new Map(aiScores.map((s) => [s.id, s]));
+  const scoredAt = new Date().toISOString();
+  const consumeBankIds = new Set<string>();
+  const consumeLedgerIds = new Set<string>();
+  const mergedMatches: MatchResult[] = [];
+
+  for (const score of aiScores) {
+    const cross = parseCrossMatchCandidateId(score.id);
+    if (!cross || score.confidence < 70) continue;
+
+    const bankResult = results.find(
+      (r) => r.bankTransaction?.id === cross.bankId
+    );
+    const ledgerResult = results.find(
+      (r) => r.ledgerEntry?.id === cross.ledgerId
+    );
+    const bank = bankResult?.bankTransaction;
+    const ledger = ledgerResult?.ledgerEntry;
+    if (!bank || !ledger) continue;
+
+    consumeBankIds.add(bank.id);
+    consumeLedgerIds.add(ledger.id);
+
+    mergedMatches.push({
+      id: crossMatchCandidateId(bank.id, ledger.id),
+      bankTransaction: bank,
+      ledgerEntry: ledger,
+      confidence: score.confidence,
+      status: statusFromAIConfidence(score.confidence),
+      matchType: "ai_scored",
+      matchReason: `AI: ${score.reasoning}`,
+      aiMetadata: {
+        aiScored: true,
+        aiConfidence: score.confidence,
+        aiReasoning: score.reasoning,
+        scoredAt,
+      },
+    });
+  }
+
+  const filtered = results.filter((r) => {
+    if (r.bankTransaction && consumeBankIds.has(r.bankTransaction.id)) {
+      return false;
+    }
+    if (r.ledgerEntry && consumeLedgerIds.has(r.ledgerEntry.id)) {
+      return false;
+    }
+    return true;
+  });
+
+  const updated = filtered.flatMap((r) => {
+    const score = scoreMap.get(r.id);
+    if (!score) return [r];
+    const applied = applyScoreToMatch(r, score, scoredAt);
+    return Array.isArray(applied) ? applied : [applied];
+  });
+
+  return [...updated, ...mergedMatches];
+}

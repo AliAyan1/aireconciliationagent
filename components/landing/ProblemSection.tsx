@@ -1,56 +1,43 @@
+const pains = [
+  {
+    icon: "⏱",
+    title: "Hours of manual work",
+    desc: "Finance teams spend 4–6 hours matching transactions line by line",
+  },
+  {
+    icon: "❌",
+    title: "Missed matches",
+    desc: "5–8% of transactions are incorrectly paired or missed entirely",
+  },
+  {
+    icon: "📋",
+    title: "No audit trail",
+    desc: "No record of who matched what, making compliance difficult",
+  },
+];
+
 export function ProblemSection() {
   return (
-    <section className="mx-auto max-w-6xl px-6 py-24">
-      <div className="overflow-hidden rounded-3xl border border-slate-800 bg-gradient-to-br from-slate-900 to-slate-950">
-        <div className="grid lg:grid-cols-2">
-          <div className="border-b border-slate-800 p-10 lg:border-b-0 lg:border-r">
-            <span className="text-4xl">😩</span>
-            <h2 className="mt-4 text-2xl font-bold text-red-400/90">
-              The old way
-            </h2>
-            <ul className="mt-6 space-y-4 text-slate-400">
-              <li className="flex gap-3">
-                <span className="text-red-400">×</span>
-                4–6 hours in Excel every month-end
-              </li>
-              <li className="flex gap-3">
-                <span className="text-red-400">×</span>
-                &quot;M AHMED SVC&quot; vs &quot;Muhammad Ahmed Fee&quot; — manual guesswork
-              </li>
-              <li className="flex gap-3">
-                <span className="text-red-400">×</span>
-                Date offsets and partial payments slip through
-              </li>
-              <li className="flex gap-3">
-                <span className="text-red-400">×</span>
-                Zero audit trail when something breaks
-              </li>
-            </ul>
-          </div>
-          <div className="p-10">
-            <span className="text-4xl">✨</span>
-            <h2 className="mt-4 text-2xl font-bold text-emerald-400">
-              With AI Reconciliation
-            </h2>
-            <ul className="mt-6 space-y-4 text-slate-300">
-              <li className="flex gap-3">
-                <span className="text-emerald-400">✓</span>
-                Under 30 minutes end-to-end
-              </li>
-              <li className="flex gap-3">
-                <span className="text-emerald-400">✓</span>
-                Structured match reasons on every row
-              </li>
-              <li className="flex gap-3">
-                <span className="text-emerald-400">✓</span>
-                Review queue for anything below 90%
-              </li>
-              <li className="flex gap-3">
-                <span className="text-emerald-400">✓</span>
-                Exportable report for compliance
-              </li>
-            </ul>
-          </div>
+    <section className="py-20 md:py-24 border-b border-default">
+      <div className="mx-auto max-w-[1200px] px-4 md:px-8">
+        <h2 className="text-center text-2xl md:text-3xl font-bold tracking-tight text-primary">
+          The problem with manual reconciliation
+        </h2>
+        <div className="mt-12 grid gap-6 md:grid-cols-3 stagger">
+          {pains.map((p) => (
+            <div
+              key={p.title}
+              className="card-surface p-6 hover:-translate-y-0.5 hover:border-hover"
+            >
+              <span className="text-3xl" aria-hidden>
+                {p.icon}
+              </span>
+              <h3 className="mt-4 font-semibold text-primary">{p.title}</h3>
+              <p className="mt-2 text-sm text-secondary leading-relaxed">
+                {p.desc}
+              </p>
+            </div>
+          ))}
         </div>
       </div>
     </section>

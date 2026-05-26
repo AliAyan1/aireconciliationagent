@@ -1,51 +1,42 @@
 const rows = [
-  { metric: "Time per cycle", manual: "4–6 hours", ai: "< 30 min", win: true },
-  { metric: "Match accuracy", manual: "92–95%", ai: "> 97%", win: true },
-  { metric: "Missed matches", manual: "5–8%", ai: "< 3%", win: true },
-  { metric: "Name variations", manual: "Manual lookup", ai: "Fuzzy + review", win: true },
-  { metric: "Audit trail", manual: "None", ai: "Full CSV log", win: true },
+  { label: "Time per cycle", manual: "4–6 hours", ai: "< 30 seconds" },
+  { label: "Accuracy", manual: "92–95%", ai: "97%+" },
+  { label: "Audit trail", manual: "None", ai: "Complete" },
+  { label: "Cost", manual: "Hours of salary", ai: "Pennies per run" },
 ];
 
 export function ComparisonSection() {
   return (
-    <section className="mx-auto max-w-6xl px-6 py-24">
-      <div className="text-center">
-        <h2 className="text-3xl font-bold sm:text-4xl">
-          Excel vs AI Reconciliation
+    <section className="py-20 md:py-24 border-b border-default">
+      <div className="mx-auto max-w-[1200px] px-4 md:px-8">
+        <h2 className="text-center text-2xl md:text-3xl font-bold tracking-tight text-primary mb-10">
+          Manual vs HisaabAI
         </h2>
-        <p className="mt-4 text-slate-400">
-          Same job. Fraction of the time. Fewer missed transactions.
-        </p>
-      </div>
-
-      <div className="mt-12 overflow-hidden rounded-2xl border border-slate-800 shadow-xl">
-        <div className="grid grid-cols-3 bg-slate-900 text-sm font-medium">
-          <div className="px-6 py-4 text-slate-400">Metric</div>
-          <div className="border-l border-slate-800 px-6 py-4 text-slate-500">
-            Manual Excel
-          </div>
-          <div className="border-l border-slate-800 bg-sky-500/5 px-6 py-4 text-sky-400">
-            AI Engine
-          </div>
+        <div className="card-surface overflow-hidden">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-elevated text-secondary">
+                <th className="px-6 py-4 text-left font-medium w-1/3" />
+                <th className="px-6 py-4 text-left font-medium">Manual</th>
+                <th className="px-6 py-4 text-left font-medium bg-[rgba(16,185,129,0.06)] text-[var(--success)]">
+                  HisaabAI
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.label} className="border-t border-default">
+                  <td className="px-6 py-4 text-secondary">{r.label}</td>
+                  <td className="px-6 py-4 text-muted">{r.manual}</td>
+                  <td className="px-6 py-4 bg-[rgba(16,185,129,0.04)] text-primary font-medium">
+                    <span className="text-[var(--success)] mr-2">✓</span>
+                    {r.ai}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
-        {rows.map((row, i) => (
-          <div
-            key={row.metric}
-            className={`grid grid-cols-3 border-t border-slate-800 ${
-              i % 2 === 0 ? "bg-slate-950" : "bg-slate-900/30"
-            }`}
-          >
-            <div className="px-6 py-4 font-medium text-slate-200">
-              {row.metric}
-            </div>
-            <div className="border-l border-slate-800 px-6 py-4 text-slate-500">
-              {row.manual}
-            </div>
-            <div className="border-l border-slate-800 px-6 py-4 font-medium text-emerald-400">
-              {row.ai}
-            </div>
-          </div>
-        ))}
       </div>
     </section>
   );

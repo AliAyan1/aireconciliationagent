@@ -4,7 +4,12 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useRef, useState } from "react";
 import { SiteHeader } from "@/components/SiteHeader";
-import { parseBankCSV, parseLedgerCSV } from "@/lib/normalizer";
+import { UploadQualityReport } from "@/components/UploadQualityReport";
+import {
+  parseBankWithQuality,
+  parseLedgerWithQuality,
+  type DataQualityReport,
+} from "@/lib/upload-quality";
 import { saveSession } from "@/lib/session";
 import type { BankTransaction, LedgerEntry } from "@/lib/types";
 
@@ -130,6 +135,10 @@ export default function UploadPage() {
   const [ledgerData, setLedgerData] = useState<LedgerEntry[]>([]);
   const [bankError, setBankError] = useState<string | null>(null);
   const [ledgerError, setLedgerError] = useState<string | null>(null);
+  const [bankQuality, setBankQuality] = useState<DataQualityReport | null>(null);
+  const [ledgerQuality, setLedgerQuality] = useState<DataQualityReport | null>(
+    null
+  );
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -140,16 +149,21 @@ export default function UploadPage() {
     }
     setBankFile(file);
     setBankError(null);
+    setBankQuality(null);
     setError(null);
     try {
       const text = await file.text();
-      const parsed = parseBankCSV(text);
-      setBankData(parsed);
-      if (parsed.length === 0) {
-        setBankError("No transaction rows found in this file.");
+      const result = parseBankWithQuality(text);
+      setBankData(result.data);
+      setBankQuality(result.report);
+      if (result.parseError) {
+        setBankError(result.parseError);
+      } else if (!result.report.canProceed) {
+        setBankError("Fix critical data quality issues before matching.");
       }
     } catch (e) {
       setBankData([]);
+      setBankQuality(null);
       setBankError(e instanceof Error ? e.message : "Failed to parse bank CSV");
     }
   }
@@ -161,16 +175,21 @@ export default function UploadPage() {
     }
     setLedgerFile(file);
     setLedgerError(null);
+    setLedgerQuality(null);
     setError(null);
     try {
       const text = await file.text();
-      const parsed = parseLedgerCSV(text);
-      setLedgerData(parsed);
-      if (parsed.length === 0) {
-        setLedgerError("No transaction rows found in this file.");
+      const result = parseLedgerWithQuality(text);
+      setLedgerData(result.data);
+      setLedgerQuality(result.report);
+      if (result.parseError) {
+        setLedgerError(result.parseError);
+      } else if (!result.report.canProceed) {
+        setLedgerError("Fix critical data quality issues before matching.");
       }
     } catch (e) {
       setLedgerData([]);
+      setLedgerQuality(null);
       setLedgerError(
         e instanceof Error ? e.message : "Failed to parse ledger CSV"
       );
@@ -181,6 +200,8 @@ export default function UploadPage() {
     setError(null);
     setBankError(null);
     setLedgerError(null);
+    setBankQuality(null);
+    setLedgerQuality(null);
     try {
       const [bankRes, ledgerRes] = await Promise.all([
         fetch("/samples/sample_bank.csv"),
@@ -191,10 +212,12 @@ export default function UploadPage() {
       }
       const bankText = await bankRes.text();
       const ledgerText = await ledgerRes.text();
-      const bank = parseBankCSV(bankText);
-      const ledger = parseLedgerCSV(ledgerText);
-      setBankData(bank);
-      setLedgerData(ledger);
+      const bankResult = parseBankWithQuality(bankText);
+      const ledgerResult = parseLedgerWithQuality(ledgerText);
+      setBankData(bankResult.data);
+      setLedgerData(ledgerResult.data);
+      setBankQuality(bankResult.report);
+      setLedgerQuality(ledgerResult.report);
       setBankFile(new File([bankText], "sample_bank.csv", { type: "text/csv" }));
       setLedgerFile(
         new File([ledgerText], "sample_ledger.csv", { type: "text/csv" })
@@ -240,11 +263,15 @@ export default function UploadPage() {
     }
   }
 
-  const ready = bankData.length > 0 && ledgerData.length > 0;
+  const ready =
+    bankData.length > 0 &&
+    ledgerData.length > 0 &&
+    bankQuality?.canProceed !== false &&
+    ledgerQuality?.canProceed !== false;
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
-      <SiteHeader active="upload" />
+      <SiteHeader active="upload" role="TEAM" />
       <main className="mx-auto max-w-4xl px-6 py-12">
         <div className="text-center mb-10">
           <h1 className="text-3xl font-bold tracking-tight">Upload CSVs</h1>
@@ -253,23 +280,35 @@ export default function UploadPage() {
           </p>
         </div>
 
-        <div className="flex flex-col gap-6 sm:flex-row">
-          <UploadZone
-            label="Bank Statement"
-            icon="🏦"
-            file={bankFile}
-            rowCount={bankData.length}
-            parseError={bankError}
-            onFile={handleBankFile}
-          />
-          <UploadZone
-            label="Internal Ledger"
-            icon="📒"
-            file={ledgerFile}
-            rowCount={ledgerData.length}
-            parseError={ledgerError}
-            onFile={handleLedgerFile}
-          />
+        <div className="flex flex-col gap-6 sm:flex-row sm:items-start">
+          <div className="flex flex-1 flex-col">
+            <UploadZone
+              label="Bank Statement"
+              icon="🏦"
+              file={bankFile}
+              rowCount={bankData.length}
+              parseError={bankError}
+              onFile={handleBankFile}
+            />
+            <UploadQualityReport
+              title="Bank data quality"
+              report={bankQuality}
+            />
+          </div>
+          <div className="flex flex-1 flex-col">
+            <UploadZone
+              label="Internal Ledger"
+              icon="📒"
+              file={ledgerFile}
+              rowCount={ledgerData.length}
+              parseError={ledgerError}
+              onFile={handleLedgerFile}
+            />
+            <UploadQualityReport
+              title="Ledger data quality"
+              report={ledgerQuality}
+            />
+          </div>
         </div>
 
         <p className="mt-4 text-center text-xs text-slate-500">
@@ -301,7 +340,7 @@ export default function UploadPage() {
                 Processing…
               </span>
             ) : (
-              "Start Reconciliation"
+              "Run HisaabAI"
             )}
           </button>
           <Link

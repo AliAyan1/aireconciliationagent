@@ -8,18 +8,42 @@ import type {
 } from "./types";
 
 const STORAGE_KEY = "reconciliation-session";
+const SESSION_ID_KEY = "reconciliation-session-id";
+
+export interface SessionAIMeta {
+  aiScoringUsed: boolean;
+  aiCandidateCount: number;
+  aiPairsScored: number;
+  aiProcessingTimeMs: number;
+}
 
 export interface SessionData {
+  sessionId?: string | null;
   results: MatchResult[];
   summary: ReconciliationSummary;
   bankData: BankTransaction[];
   ledgerData: LedgerEntry[];
   missingProposals: MissingEntryProposal[];
   journalPosts: JournalPost[];
+  aiMeta?: SessionAIMeta;
+}
+
+export function saveSessionId(id: string): void {
+  if (typeof window === "undefined") return;
+  sessionStorage.setItem(SESSION_ID_KEY, id);
+}
+
+export function loadSessionId(): string | null {
+  if (typeof window === "undefined") return null;
+  return sessionStorage.getItem(SESSION_ID_KEY);
 }
 
 export function saveSession(data: SessionData): void {
+  if (typeof window === "undefined") return;
   sessionStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  if (data.sessionId) {
+    sessionStorage.setItem(SESSION_ID_KEY, data.sessionId);
+  }
 }
 
 export function loadSession(): SessionData | null {
@@ -30,6 +54,7 @@ export function loadSession(): SessionData | null {
     const parsed = JSON.parse(raw) as SessionData;
     return {
       ...parsed,
+      sessionId: parsed.sessionId ?? loadSessionId(),
       missingProposals: parsed.missingProposals ?? [],
       journalPosts: parsed.journalPosts ?? [],
     };
@@ -49,4 +74,10 @@ export function updateSessionResults(
   summary: ReconciliationSummary
 ): void {
   updateSession({ results, summary });
+}
+
+export function clearSession(): void {
+  if (typeof window === "undefined") return;
+  sessionStorage.removeItem(STORAGE_KEY);
+  sessionStorage.removeItem(SESSION_ID_KEY);
 }

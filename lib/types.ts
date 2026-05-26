@@ -30,7 +30,20 @@ export type MatchStatus =
   | "unmatched"
   | "posted";
 
-export type MatchType = "exact" | "near" | "fuzzy" | "unmatched" | "generated";
+export type MatchType =
+  | "exact"
+  | "near"
+  | "fuzzy"
+  | "ai_scored"
+  | "generated"
+  | "unmatched";
+
+export interface AIScoreMetadata {
+  aiScored: boolean;
+  aiConfidence: number | null;
+  aiReasoning: string | null;
+  scoredAt: string | null;
+}
 
 export interface MatchResult {
   id: string;
@@ -41,6 +54,7 @@ export interface MatchResult {
   matchType: MatchType;
   matchReason: string;
   postedAt?: string;
+  aiMetadata?: AIScoreMetadata;
 }
 
 export interface ReconciliationSummary {

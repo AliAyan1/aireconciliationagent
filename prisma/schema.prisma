@@ -1,0 +1,245 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id           String   @id @default(cuid())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  email        String   @unique
+  passwordHash String
+  name         String
+  role         UserRole
+
+  @@index([role])
+}
+
+enum UserRole {
+  TEAM
+  ADMIN
+}
+
+model ReconciliationSession {
+  id                    String   @id @default(cuid())
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  name                  String?
+  status                SessionStatus @default(PROCESSING)
+  bankFileName          String
+  bankRowCount          Int
+  ledgerFileName        String
+  ledgerRowCount        Int
+  totalMatched          Int      @default(0)
+  totalAutoMatched      Int      @default(0)
+  totalNeedsReview      Int      @default(0)
+  totalUnmatched        Int      @default(0)
+  totalPosted           Int      @default(0)
+  matchRate             Float    @default(0)
+  totalBankAmount       Float    @default(0)
+  totalLedgerAmount     Float    @default(0)
+  amountDifference      Float    @default(0)
+  aiScoringUsed         Boolean  @default(false)
+  aiPairsScored         Int      @default(0)
+  aiProcessingTimeMs    Int      @default(0)
+  rulesProcessingTimeMs Int      @default(0)
+  precision             Float?
+  recall                Float?
+  f1Score               Float?
+  accuracy              Float?
+  bankTransactions      BankTransaction[]
+  ledgerEntries         LedgerEntry[]
+  matchResults          MatchResult[]
+  journalPosts          JournalPost[]
+  missingProposals      MissingEntryProposal[]
+
+  @@index([createdAt])
+  @@index([status])
+}
+
+enum SessionStatus {
+  PROCESSING
+  COMPLETED
+  REVIEWED
+  POSTED
+  EXPORTED
+}
+
+model BankTransaction {
+  id                    String   @id @default(cuid())
+  createdAt             DateTime @default(now())
+  sessionId             String
+  session               ReconciliationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  date                  DateTime
+  description           String
+  normalizedDescription String
+  debit                 Float?
+  credit                Float?
+  amount                Float
+  type                  TransactionType
+  balance               Float?
+  reference             String?
+  rowIndex              Int
+  isMatched             Boolean  @default(false)
+  matchResults          MatchResult[] @relation("BankToMatch")
+  missingProposals      MissingEntryProposal[] @relation("BankToProposal")
+
+  @@index([sessionId])
+  @@index([sessionId, amount, type])
+  @@index([sessionId, date])
+}
+
+model LedgerEntry {
+  id                    String   @id @default(cuid())
+  createdAt             DateTime @default(now())
+  sessionId             String
+  session               ReconciliationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  date                  DateTime
+  description           String
+  normalizedDescription String
+  amount                Float
+  type                  TransactionType
+  reference             String?
+  invoiceNo             String?
+  rowIndex              Int
+  isMatched             Boolean  @default(false)
+  matchResults          MatchResult[] @relation("LedgerToMatch")
+  missingProposals      MissingEntryProposal[] @relation("LedgerToProposal")
+
+  @@index([sessionId])
+  @@index([sessionId, amount, type])
+  @@index([sessionId, date])
+}
+
+enum TransactionType {
+  DEBIT
+  CREDIT
+}
+
+model MatchResult {
+  id              String   @id @default(cuid())
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  sessionId       String
+  session         ReconciliationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  bankTxnId       String?
+  bankTransaction BankTransaction? @relation("BankToMatch", fields: [bankTxnId], references: [id])
+  ledgerEntryId   String?
+  ledgerEntry     LedgerEntry? @relation("LedgerToMatch", fields: [ledgerEntryId], references: [id])
+  confidence      Float
+  status          MatchStatus @default(UNMATCHED)
+  matchType       MatchType @default(UNMATCHED)
+  matchReason     String
+  bankAmount      Float?
+  ledgerAmount    Float?
+  amountDiff      Float?
+  aiScored        Boolean  @default(false)
+  aiConfidence    Float?
+  aiReasoning     String?
+  aiScoredAt      DateTime?
+  reviewedBy      String?
+  reviewedAt      DateTime?
+  reviewNote      String?
+  postedAt        DateTime?
+  postedBy        String?
+
+  @@index([sessionId])
+  @@index([sessionId, status])
+  @@index([sessionId, matchType])
+  @@index([sessionId, confidence])
+}
+
+enum MatchStatus {
+  AUTO_MATCHED
+  REVIEW
+  APPROVED
+  REJECTED
+  UNMATCHED
+  POSTED
+}
+
+enum MatchType {
+  EXACT
+  NEAR
+  FUZZY
+  AI_SCORED
+  GENERATED
+  UNMATCHED
+}
+
+model JournalPost {
+  id            String   @id @default(cuid())
+  createdAt     DateTime @default(now())
+  sessionId     String
+  session       ReconciliationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  action        JournalAction
+  description   String
+  matchResultId String?
+  proposalId    String?
+  performedBy   String   @default("system")
+  bankAmount    Float?
+  ledgerAmount  Float?
+
+  @@index([sessionId])
+  @@index([sessionId, createdAt])
+  @@index([action])
+}
+
+enum JournalAction {
+  SESSION_CREATED
+  FILES_UPLOADED
+  MATCHING_STARTED
+  MATCHING_COMPLETED
+  AI_SCORING_STARTED
+  AI_SCORING_COMPLETED
+  MATCH_AUTO_APPROVED
+  MATCH_SENT_TO_REVIEW
+  MATCH_APPROVED
+  MATCH_REJECTED
+  ENTRY_POSTED
+  MISSING_GENERATED
+  PROPOSAL_POSTED
+  REPORT_EXPORTED
+  EVALUATION_RUN
+}
+
+model MissingEntryProposal {
+  id                  String   @id @default(cuid())
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  sessionId           String
+  session             ReconciliationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  sourceSide          ProposalSide
+  bankTxnId           String?
+  bankTransaction     BankTransaction? @relation("BankToProposal", fields: [bankTxnId], references: [id])
+  ledgerEntryId       String?
+  ledgerEntry         LedgerEntry? @relation("LedgerToProposal", fields: [ledgerEntryId], references: [id])
+  proposedDate        DateTime
+  proposedDescription String
+  proposedAmount      Float
+  proposedType        TransactionType
+  proposedReference   String?
+  proposedInvoiceNo   String?
+  status              ProposalStatus @default(PENDING)
+  reviewedBy          String?
+  reviewedAt          DateTime?
+  postedAt            DateTime?
+
+  @@index([sessionId])
+  @@index([sessionId, status])
+}
+
+enum ProposalSide {
+  BANK
+  LEDGER
+}
+
+enum ProposalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  POSTED
+}

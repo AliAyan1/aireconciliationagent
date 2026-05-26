@@ -2,29 +2,22 @@ import Link from "next/link";
 
 export function SiteFooter() {
   return (
-    <footer className="border-t border-slate-800 bg-slate-950">
-      <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-6 px-6 py-10 sm:flex-row">
-        <div className="flex items-center gap-2 text-sm text-slate-500">
-          <span className="flex h-7 w-7 items-center justify-center rounded-md bg-gradient-to-br from-sky-500 to-indigo-600 text-xs font-bold text-white">
-            AI
-          </span>
-          <span>Reconciliation Engine · MVP</span>
-        </div>
-        <nav className="flex flex-wrap justify-center gap-6 text-sm text-slate-500">
-          <Link href="/" className="hover:text-slate-300">
-            Home
-          </Link>
-          <Link href="/upload" className="hover:text-slate-300">
+    <footer className="border-t border-default bg-primary py-10">
+      <div className="mx-auto flex max-w-[1200px] flex-col items-center gap-4 px-4 text-center md:flex-row md:justify-between md:text-left md:px-8">
+        <p className="text-sm text-muted">
+          HisaabAI · Built by Ali Ayan · Quest 2 Sprint · May 2026
+        </p>
+        <nav className="flex flex-wrap justify-center gap-6 text-sm text-secondary">
+          <Link href="/upload" className="hover:text-accent transition-colors">
             Upload
           </Link>
-          <Link href="/dashboard" className="hover:text-slate-300">
+          <Link href="/dashboard" className="hover:text-accent transition-colors">
             Dashboard
           </Link>
-          <Link href="#features" className="hover:text-slate-300">
-            Features
+          <Link href="/history" className="hover:text-accent transition-colors">
+            History
           </Link>
         </nav>
-        <p className="text-xs text-slate-600">PKR · CSV · OpenAI-ready</p>
       </div>
     </footer>
   );

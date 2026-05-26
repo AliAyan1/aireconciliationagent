@@ -8,7 +8,7 @@ export function prepareCsvText(raw: string): string {
   return raw.replace(/^\uFEFF/, "").replace(/\r\n/g, "\n").trim();
 }
 
-function parseCsvTable(csvText: string) {
+export function parseCsvTable(csvText: string) {
   const text = prepareCsvText(csvText);
   return Papa.parse<Record<string, string>>(text, {
     header: true,
@@ -18,23 +18,30 @@ function parseCsvTable(csvText: string) {
   });
 }
 
+function formatParseError(label: string, err: Papa.ParseError): string {
+  const parts: string[] = [`${label} file parse error`];
+  if (err.row != null) parts.push(`row ${err.row + 1}`);
+  if (err.index != null) parts.push(`column ${err.index + 1}`);
+  return `${parts.join(", ")}: ${err.message}`;
+}
+
 function assertParseResult(
   label: string,
   data: Record<string, string>[],
   errors: Papa.ParseError[]
 ): Record<string, string>[] {
   if (errors.length > 0) {
-    throw new Error(`${label} CSV parse error: ${errors[0].message}`);
+    throw new Error(formatParseError(label, errors[0]));
   }
   if (data.length === 0) {
     throw new Error(
-      `${label} CSV is empty or has no data rows. Save as CSV (comma-separated) with a header row.`
+      `${label} file is empty or has no data rows. Include a header row with Date and Description.`
     );
   }
   const headers = Object.keys(data[0] ?? {});
   if (headers.length < 2) {
     throw new Error(
-      `${label} CSV headers not recognized. Expected columns like Date, Description, Amount.`
+      `${label} file headers not recognized (row 1). Expected columns like Date, Description, Amount. Found: ${headers.join(", ") || "(none)"}`
     );
   }
   return data;
@@ -45,7 +52,7 @@ function nextId(prefix: string): string {
   return `${prefix}-${idCounter}`;
 }
 
-function parseAmount(value: string | undefined): number | null {
+export function parseAmount(value: string | undefined): number | null {
   if (value === undefined || value === null || value.trim() === "") {
     return null;
   }
@@ -54,7 +61,7 @@ function parseAmount(value: string | undefined): number | null {
   return Number.isNaN(n) ? null : n;
 }
 
-function normalizeDate(value: string | undefined): string {
+export function normalizeDate(value: string | undefined): string {
   if (!value?.trim()) return "";
   const parsed = new Date(value.trim());
   if (!Number.isNaN(parsed.getTime())) {
@@ -63,7 +70,7 @@ function normalizeDate(value: string | undefined): string {
   return value.trim();
 }
 
-function getField(row: Record<string, string>, names: string[]): string {
+export function getField(row: Record<string, string>, names: string[]): string {
   for (const name of names) {
     const key = Object.keys(row).find(
       (k) => k.toLowerCase().replace(/\s+/g, "_") === name.toLowerCase()
@@ -97,22 +104,40 @@ export function normalizeDescription(desc: string): string {
 }
 
 export function parseBankCSV(csvText: string): BankTransaction[] {
+  const label = "Bank";
   idCounter = 0;
   const { data, errors } = parseCsvTable(csvText);
-  const rows = assertParseResult("Bank", data, errors);
+  const rows = assertParseResult(label, data, errors);
 
-  return rows.map((row) => {
+  return rows.map((row, index) => {
+    const rowNum = index + 2;
     const debit = parseAmount(getField(row, ["debit", "Debit"]) || row.Debit);
     const credit = parseAmount(
       getField(row, ["credit", "Credit"]) || row.Credit
     );
+    if (debit === null && credit === null) {
+      throw new Error(
+        `${label} row ${rowNum}: missing Debit and Credit — at least one amount column is required.`
+      );
+    }
     const amount = debit ?? credit ?? 0;
     const type: "debit" | "credit" = debit !== null ? "debit" : "credit";
     const description = getField(row, ["description", "Description"]);
+    if (!description) {
+      throw new Error(
+        `${label} row ${rowNum}: missing Description column value.`
+      );
+    }
+    const date = normalizeDate(getField(row, ["date", "Date"]) || row.Date);
+    if (!date) {
+      throw new Error(
+        `${label} row ${rowNum}: invalid or missing Date column value.`
+      );
+    }
 
     return {
       id: nextId("bank"),
-      date: normalizeDate(getField(row, ["date", "Date"]) || row.Date),
+      date,
       description,
       normalizedDescription: normalizeDescription(description),
       debit,
@@ -128,24 +153,45 @@ export function parseBankCSV(csvText: string): BankTransaction[] {
 }
 
 export function parseLedgerCSV(csvText: string): LedgerEntry[] {
+  const label = "Ledger";
   idCounter = 0;
   const { data, errors } = parseCsvTable(csvText);
-  const rows = assertParseResult("Ledger", data, errors);
+  const rows = assertParseResult(label, data, errors);
 
-  return rows.map((row) => {
+  return rows.map((row, index) => {
+    const rowNum = index + 2;
     const rawType = (
       getField(row, ["type", "Type"]) || row.Type || "debit"
     ).toLowerCase();
     const type: "debit" | "credit" =
       rawType === "credit" ? "credit" : "debit";
     const description = getField(row, ["description", "Description"]);
+    if (!description) {
+      throw new Error(
+        `${label} row ${rowNum}: missing Description column value.`
+      );
+    }
+    const date = normalizeDate(getField(row, ["date", "Date"]) || row.Date);
+    if (!date) {
+      throw new Error(
+        `${label} row ${rowNum}: invalid or missing Date column value.`
+      );
+    }
+    const amount = parseAmount(
+      getField(row, ["amount", "Amount"]) || row.Amount
+    );
+    if (amount === null) {
+      throw new Error(
+        `${label} row ${rowNum}: invalid or missing Amount column value.`
+      );
+    }
 
     return {
       id: nextId("ledger"),
-      date: normalizeDate(getField(row, ["date", "Date"]) || row.Date),
+      date,
       description,
       normalizedDescription: normalizeDescription(description),
-      amount: parseAmount(getField(row, ["amount", "Amount"]) || row.Amount) ?? 0,
+      amount,
       type,
       reference: getField(row, ["reference", "Reference"]) || row.Reference,
       invoiceNo:

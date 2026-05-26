@@ -1,4 +1,4 @@
-# AI Reconciliation Engine
+# HisaabAI
 
 ## Project Overview
 An AI-powered financial reconciliation tool that automates matching bank statement transactions against internal ledger entries. Built for finance teams who currently spend 4-6 hours monthly doing this manually in Excel.

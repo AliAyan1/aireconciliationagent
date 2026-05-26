@@ -1,40 +1,121 @@
 "use client";
 
-import type { MatchResult } from "@/lib/types";
+import { useState } from "react";
+import toast from "react-hot-toast";
+import type { MatchResult, ReconciliationSummary } from "@/lib/types";
+import { downloadCsvReport } from "@/lib/client-export";
+import { buildSummaryEmailDraft } from "@/lib/email-draft";
+import { APP_REPORT_TITLE } from "@/lib/branding";
+import { downloadReconciliationPdf } from "@/lib/pdf-export";
 
-interface ExportButtonProps {
+interface ExportSectionProps {
   results: MatchResult[];
+  summary: ReconciliationSummary;
+  sessionId?: string | null;
+  onExportCsv?: () => void;
 }
 
-export function ExportButton({ results }: ExportButtonProps) {
-  async function handleExport() {
-    const res = await fetch("/api/export", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ results }),
-    });
+export function ExportSection({
+  results,
+  summary,
+  sessionId,
+  onExportCsv,
+}: ExportSectionProps) {
+  const [showEmail, setShowEmail] = useState(false);
+  const emailDraft = buildSummaryEmailDraft(
+    summary,
+    new Date().toLocaleDateString("en-PK", { month: "long", year: "numeric" })
+  );
 
-    if (!res.ok) {
-      alert("Export failed. Please try again.");
-      return;
+  async function handleExportCsv() {
+    try {
+      const ok = await downloadCsvReport(results, sessionId);
+      if (!ok) {
+        toast.error("Export failed. Please try again.");
+        return;
+      }
+      toast.success("📥 Report downloaded");
+      setShowEmail(true);
+      onExportCsv?.();
+    } catch {
+      toast.error("Export failed. Please try again.");
     }
+  }
 
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "reconciliation-report.csv";
-    a.click();
-    URL.revokeObjectURL(url);
+  async function handleExportPdf() {
+    try {
+      await downloadReconciliationPdf(results, summary, APP_REPORT_TITLE);
+      toast.success("📥 PDF report downloaded");
+      setShowEmail(true);
+    } catch {
+      toast.error("PDF export failed.");
+    }
+  }
+
+  async function copyEmail() {
+    try {
+      await navigator.clipboard.writeText(emailDraft);
+      toast.success("Email draft copied to clipboard");
+    } catch {
+      toast.error("Could not copy to clipboard");
+    }
   }
 
   return (
-    <button
-      type="button"
-      onClick={handleExport}
-      className="rounded-lg bg-gradient-to-r from-sky-500 to-indigo-500 px-6 py-3 font-medium text-white hover:from-sky-400 hover:to-indigo-400"
-    >
-      Download Reconciliation Report
-    </button>
+    <div className="gradient-border p-6 md:p-8 text-center">
+      <h3 className="text-lg font-semibold text-primary">
+        Download {APP_REPORT_TITLE}
+      </h3>
+      <p className="mt-2 text-sm text-secondary max-w-lg mx-auto">
+        Includes all matched, reviewed, and unmatched transactions with audit
+        trail
+      </p>
+      <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3">
+        <button
+          type="button"
+          onClick={() => void handleExportCsv()}
+          className="btn-primary w-full sm:w-auto px-8 py-3 text-sm"
+          aria-label="Download CSV report"
+        >
+          Download CSV →
+        </button>
+        <button
+          type="button"
+          onClick={() => void handleExportPdf()}
+          className="btn-ghost w-full sm:w-auto px-8 py-3 text-sm"
+          aria-label="Download PDF report"
+        >
+          Download PDF →
+        </button>
+      </div>
+
+      {(showEmail || results.length > 0) && (
+        <div className="mt-8 text-left max-w-lg mx-auto">
+          <button
+            type="button"
+            onClick={() => setShowEmail((v) => !v)}
+            className="text-sm text-accent hover:underline"
+          >
+            {showEmail ? "Hide" : "Show"} draft summary email
+          </button>
+          {showEmail && (
+            <div className="mt-3 rounded-lg bg-input border border-default p-4">
+              <pre className="text-xs text-secondary whitespace-pre-wrap font-sans">
+                {emailDraft}
+              </pre>
+              <button
+                type="button"
+                onClick={() => void copyEmail()}
+                className="btn-primary mt-4 w-full py-2 text-sm"
+              >
+                Copy to clipboard
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
+
+export const ExportButton = ExportSection;

@@ -1,9 +1,7 @@
 import type {
-  BankMissingProposal,
   BankTransaction,
   JournalPost,
   LedgerEntry,
-  LedgerMissingProposal,
   MatchResult,
   MissingEntryProposal,
 } from "./types";

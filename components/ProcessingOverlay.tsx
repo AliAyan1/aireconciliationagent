@@ -1,0 +1,35 @@
+interface ProcessingOverlayProps {
+  message: string;
+  progress?: number;
+}
+
+export function ProcessingOverlay({ message, progress }: ProcessingOverlayProps) {
+  const pct = progress ?? 0;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(5,10,18,0.85)] backdrop-blur-md"
+      role="alert"
+      aria-busy="true"
+      aria-live="polite"
+    >
+      <div className="mx-4 w-full max-w-md card-surface p-8 shadow-[var(--shadow-elevated)] animate-fade-up">
+        <div className="flex flex-col items-center gap-5">
+          <div className="h-11 w-11 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+          <p className="text-center text-sm font-medium text-primary">
+            {message}
+          </p>
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-input">
+            <div
+              className="h-full rounded-full transition-all duration-500 ease-out"
+              style={{
+                width: `${Math.min(100, Math.max(pct, 8))}%`,
+                background: "var(--accent-gradient)",
+              }}
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
