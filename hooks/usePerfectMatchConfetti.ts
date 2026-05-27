@@ -5,6 +5,7 @@ import {
   firePerfectMatchConfetti,
   isPerfectMatch,
 } from "@/lib/perfect-match-confetti";
+import { playPerfectMatchCelebration } from "@/lib/ui-sounds";
 import type { ReconciliationSummary } from "@/lib/types";
 
 /**
@@ -33,6 +34,7 @@ export function usePerfectMatchConfetti(
       sessionStorage.setItem(storageKey, "1");
     }
 
+    playPerfectMatchCelebration();
     void firePerfectMatchConfetti();
   }, [
     enabled,

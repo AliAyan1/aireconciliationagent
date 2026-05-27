@@ -1,4 +1,8 @@
 import {
+  applyColumnMapping,
+  type ColumnMapping,
+} from "./column-mapping";
+import {
   getField,
   normalizeDate,
   normalizeDescription,
@@ -47,11 +51,27 @@ function buildReport(checks: QualityCheck[]): DataQualityReport {
   return { checks, canProceed };
 }
 
+/** Detect a signed-amount-only bank CSV (no Debit/Credit columns). */
+function hasSingleAmountCol(headers: string[]): boolean {
+  const lower = headers.map((h) => h.toLowerCase().replace(/\s+/g, "_"));
+  return (
+    lower.includes("amount") &&
+    !lower.includes("debit") &&
+    !lower.includes("credit")
+  );
+}
+
 export function parseBankWithQuality(
-  csvText: string
+  csvText: string,
+  filename?: string,
+  columnMapping?: ColumnMapping
 ): ParseWithQualityResult<BankTransaction> {
   idCounter = 0;
-  const { data: rows, errors } = parseCsvTable(csvText);
+  const parsed = parseCsvTable(csvText);
+  const rows = columnMapping
+    ? applyColumnMapping(parsed.data, columnMapping)
+    : parsed.data;
+  const errors = parsed.errors;
 
   if (errors.length > 0) {
     return {
@@ -67,42 +87,80 @@ export function parseBankWithQuality(
   }
 
   if (rows.length === 0) {
+    const filePart = filename ? ` in ${filename}` : "";
+    const msg = `No data rows found${filePart}.`;
     return {
       data: [],
-      parseError: "No data rows found in file.",
-      report: buildReport([
-        { status: "fail", message: "0 rows parsed — file is empty or has no data rows" },
-      ]),
+      parseError: msg,
+      report: buildReport([{ status: "fail", message: msg }]),
     };
   }
+
+  const headers = Object.keys(rows[0] ?? {});
+  const singleAmt = hasSingleAmountCol(headers);
 
   const transactions: BankTransaction[] = [];
   let emptyDescriptions = 0;
   let invalidDates = 0;
   let invalidAmounts = 0;
   let negativeAmounts = 0;
+  let hasSignedAmountColumn = false;
 
   for (const row of rows) {
-    const debit = parseAmount(getField(row, ["debit", "Debit"]) || row.Debit);
-    const credit = parseAmount(
-      getField(row, ["credit", "Credit"]) || row.Credit
-    );
+    let debit: number | null = null;
+    let credit: number | null = null;
+    let amount: number;
+    let type: "debit" | "credit";
 
-    if (debit === null && credit === null) {
-      invalidAmounts++;
-      continue;
+    if (singleAmt) {
+      // Signed Amount column: negative → debit, positive → credit
+      const raw = parseAmount(
+        getField(row, ["amount", "Amount"]) || row.Amount
+      );
+      if (raw === null) {
+        invalidAmounts++;
+        continue;
+      }
+      if (raw < 0) {
+        hasSignedAmountColumn = true;
+        debit = Math.abs(raw);
+        amount = debit;
+        type = "debit";
+      } else {
+        credit = raw;
+        amount = credit;
+        type = "credit";
+      }
+    } else {
+      const rawDebit = parseAmount(
+        getField(row, ["debit", "Debit"]) || row.Debit
+      );
+      const rawCredit = parseAmount(
+        getField(row, ["credit", "Credit"]) || row.Credit
+      );
+
+      if (rawDebit === null && rawCredit === null) {
+        invalidAmounts++;
+        continue;
+      }
+
+      // Strip any sign — the column name carries the direction
+      debit = rawDebit !== null ? Math.abs(rawDebit) : null;
+      credit = rawCredit !== null ? Math.abs(rawCredit) : null;
+      amount = debit ?? credit ?? 0;
+      type = debit !== null ? "debit" : "credit";
     }
 
-    const amount = debit ?? credit ?? 0;
     if (amount < 0) negativeAmounts++;
 
     const description = getField(row, ["description", "Description"]);
     if (!description.trim()) emptyDescriptions++;
 
-    const date = normalizeDate(getField(row, ["date", "Date"]) || row.Date);
+    const date = normalizeDate(
+      getField(row, ["date", "Date", "transaction_date", "value_date"]) ||
+        row.Date
+    );
     if (!isValidIsoDate(date)) invalidDates++;
-
-    const type: "debit" | "credit" = debit !== null ? "debit" : "credit";
 
     transactions.push({
       id: nextId("bank"),
@@ -116,9 +174,11 @@ export function parseBankWithQuality(
       amount: Math.abs(amount),
       type,
       balance: parseAmount(
-        getField(row, ["balance", "Balance"]) || row.Balance
+        getField(row, ["balance", "Balance", "running_balance"]) ||
+          row.Balance
       ),
-      reference: getField(row, ["reference", "Reference"]) || row.Reference,
+      reference:
+        getField(row, ["reference", "Reference", "ref"]) || row.Reference,
     });
   }
 
@@ -131,9 +191,13 @@ export function parseBankWithQuality(
       message: "0 rows parsed — no usable transaction rows",
     });
   } else {
+    checks.push({ status: "pass", message: `${rowCount} rows parsed` });
+  }
+
+  if (hasSignedAmountColumn) {
     checks.push({
       status: "pass",
-      message: `${rowCount} rows parsed`,
+      message: "Signed Amount column detected — negatives treated as debits",
     });
   }
 
@@ -151,13 +215,12 @@ export function parseBankWithQuality(
     });
   }
 
-  const amountIssues = invalidAmounts;
-  if (amountIssues === 0 && rowCount > 0) {
+  if (invalidAmounts === 0 && rowCount > 0) {
     checks.push({ status: "pass", message: "All amounts are numbers" });
-  } else if (amountIssues > 0) {
+  } else if (invalidAmounts > 0) {
     checks.push({
-      status: amountIssues >= rows.length ? "fail" : "warn",
-      message: `${plural(amountIssues, "row")} missing debit/credit amounts`,
+      status: invalidAmounts >= rows.length ? "fail" : "warn",
+      message: `${plural(invalidAmounts, "row")} missing debit/credit amounts`,
     });
   }
 
@@ -183,10 +246,16 @@ export function parseBankWithQuality(
 }
 
 export function parseLedgerWithQuality(
-  csvText: string
+  csvText: string,
+  filename?: string,
+  columnMapping?: ColumnMapping
 ): ParseWithQualityResult<LedgerEntry> {
   idCounter = 0;
-  const { data: rows, errors } = parseCsvTable(csvText);
+  const parsed = parseCsvTable(csvText);
+  const rows = columnMapping
+    ? applyColumnMapping(parsed.data, columnMapping)
+    : parsed.data;
+  const errors = parsed.errors;
 
   if (errors.length > 0) {
     return {
@@ -202,12 +271,12 @@ export function parseLedgerWithQuality(
   }
 
   if (rows.length === 0) {
+    const filePart = filename ? ` in ${filename}` : "";
+    const msg = `No data rows found${filePart}.`;
     return {
       data: [],
-      parseError: "No data rows found in file.",
-      report: buildReport([
-        { status: "fail", message: "0 rows parsed — file is empty or has no data rows" },
-      ]),
+      parseError: msg,
+      report: buildReport([{ status: "fail", message: msg }]),
     };
   }
 
@@ -221,24 +290,27 @@ export function parseLedgerWithQuality(
     const rawType = (
       getField(row, ["type", "Type"]) || row.Type || "debit"
     ).toLowerCase();
-    const type: "debit" | "credit" =
-      rawType === "credit" ? "credit" : "debit";
+    const type: "debit" | "credit" = rawType === "credit" ? "credit" : "debit";
 
-    const amount = parseAmount(
+    const rawAmount = parseAmount(
       getField(row, ["amount", "Amount"]) || row.Amount
     );
 
-    if (amount === null) {
+    if (rawAmount === null) {
       invalidAmounts++;
       continue;
     }
 
-    if (amount < 0) negativeAmounts++;
+    const amount = Math.abs(rawAmount);
+    if (rawAmount < 0) negativeAmounts++;
 
     const description = getField(row, ["description", "Description"]);
     if (!description.trim()) emptyDescriptions++;
 
-    const date = normalizeDate(getField(row, ["date", "Date"]) || row.Date);
+    const date = normalizeDate(
+      getField(row, ["date", "Date", "transaction_date", "entry_date"]) ||
+        row.Date
+    );
     if (!isValidIsoDate(date)) invalidDates++;
 
     entries.push({
@@ -248,11 +320,17 @@ export function parseLedgerWithQuality(
       normalizedDescription: description.trim()
         ? normalizeDescription(description)
         : "",
-      amount: Math.abs(amount),
+      amount,
       type,
-      reference: getField(row, ["reference", "Reference"]) || row.Reference,
+      reference:
+        getField(row, ["reference", "Reference", "ref"]) || row.Reference,
       invoiceNo:
-        getField(row, ["invoice_no", "Invoice_No", "invoice"]) ||
+        getField(row, [
+          "invoice_no",
+          "Invoice_No",
+          "invoice",
+          "invoice_number",
+        ]) ||
         row.Invoice_No ||
         "",
     });
@@ -267,10 +345,7 @@ export function parseLedgerWithQuality(
       message: "0 rows parsed — no usable transaction rows",
     });
   } else {
-    checks.push({
-      status: "pass",
-      message: `${rowCount} rows parsed`,
-    });
+    checks.push({ status: "pass", message: `${rowCount} rows parsed` });
   }
 
   if (invalidDates === 0 && rowCount > 0) {
@@ -306,7 +381,7 @@ export function parseLedgerWithQuality(
   if (negativeAmounts > 0) {
     checks.push({
       status: "warn",
-      message: `${plural(negativeAmounts, "row")} have a negative amount`,
+      message: `${plural(negativeAmounts, "row")} have a negative amount — treated as positive`,
     });
   }
 

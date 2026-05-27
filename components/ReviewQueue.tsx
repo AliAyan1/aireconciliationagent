@@ -1,31 +1,49 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
+import { CategoryBadge } from "./ai/CategoryBadge";
+import { ConfidenceBreakdown } from "./ai/ConfidenceBreakdown";
+import { FraudAlertBadge } from "./ai/FraudAlertBadge";
+import { ReviewConversation } from "./ai/ReviewConversation";
+import { RiskBadge } from "./ai/RiskBadge";
+import { VoiceReviewControls } from "./ai/VoiceReviewControls";
+import { ReviewMobileSheet } from "./dashboard/ReviewMobileSheet";
 import type { MatchResult } from "@/lib/types";
 import { formatDate, formatPKR } from "@/lib/format";
 import { getMatchAIReasoning, isMatchAIScored } from "@/lib/ai-display";
-import { ConfidenceBadge } from "./ConfidenceBadge";
+import { AnomalyFlagBadge } from "./AnomalyFlagBadge";
 import { EmptyState } from "./EmptyState";
+import { ExplainMatchButton } from "./ExplainMatchButton";
 import { MatchTypeBadge } from "./MatchTypeBadge";
+import { isBankCharge } from "@/lib/transaction-categories";
+import { AmountWithHoverStat } from "./AmountWithHoverStat";
 
 interface ReviewQueueProps {
   results: MatchResult[];
   onUpdate: (id: string, status: "approved" | "rejected") => void;
+  /** If provided, called for single-item decisions (wraps with undo). Falls back to onUpdate. */
+  onCommit?: (match: MatchResult, status: "approved" | "rejected") => void;
   focusedId?: string | null;
   onFocusChange?: (id: string | null) => void;
+  anomalyMap?: Record<string, string>;
+  fraudMap?: Record<string, string>;
 }
 
 export function ReviewQueue({
   results,
   onUpdate,
+  onCommit,
   focusedId,
   onFocusChange,
+  anomalyMap = {},
+  fraudMap = {},
 }: ReviewQueueProps) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [confirm, setConfirm] = useState<{
     action: "approve" | "reject";
     count: number;
   } | null>(null);
+  const [mobileSheetId, setMobileSheetId] = useState<string | null>(null);
 
   const pending = useMemo(
     () => results.filter((r) => r.status === "review"),
@@ -53,14 +71,36 @@ export function ReviewQueue({
     }
   }
 
+  const recordDecision = useCallback(
+    (match: MatchResult, action: "approved" | "rejected") => {
+      if (onCommit) {
+        onCommit(match, action);
+      } else {
+        onUpdate(match.id, action);
+      }
+    },
+    [onUpdate, onCommit]
+  );
+
   function runBulk(action: "approve" | "reject") {
     const status = action === "approve" ? "approved" : "rejected";
     const ids = [...selected].filter((id) =>
       pending.some((r) => r.id === id)
     );
-    ids.forEach((id) => onUpdate(id, status));
+    ids.forEach((id) => {
+      const match = pending.find((r) => r.id === id);
+      if (match) recordDecision(match, status);
+    });
     setSelected(new Set());
     setConfirm(null);
+  }
+
+  const focusedPending = pending.find((r) => r.id === focusedId);
+
+  function goNextReview() {
+    const idx = pending.findIndex((r) => r.id === focusedId);
+    const next = pending[idx + 1] ?? pending[0];
+    if (next) onFocusChange?.(next.id);
   }
 
   if (results.length === 0) {
@@ -75,8 +115,17 @@ export function ReviewQueue({
 
   return (
     <div className="space-y-4">
+      {focusedPending && (
+        <VoiceReviewControls
+          disabled={focusedPending.status !== "review"}
+          onApprove={() => recordDecision(focusedPending, "approved")}
+          onReject={() => recordDecision(focusedPending, "rejected")}
+          onNext={goNextReview}
+          onSkip={goNextReview}
+        />
+      )}
       {pending.length > 0 && (
-        <div className="card-surface p-4 flex flex-col sm:flex-row sm:flex-wrap items-start sm:items-center gap-3">
+        <div className="no-print glass-card p-4 flex flex-col sm:flex-row sm:flex-wrap items-start sm:items-center gap-3">
           <label className="flex items-center gap-2 text-sm text-secondary cursor-pointer">
             <input
               type="checkbox"
@@ -137,19 +186,24 @@ export function ReviewQueue({
             key={r.id}
             tabIndex={isPending ? 0 : -1}
             onFocus={() => onFocusChange?.(r.id)}
-            onClick={() => onFocusChange?.(r.id)}
-            className={`card-surface border-l-[3px] p-4 sm:p-5 transition-all duration-200 ${border} ${
+            onClick={() => {
+              onFocusChange?.(r.id);
+              if (isPending && typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches) {
+                setMobileSheetId(r.id);
+              }
+            }}
+            className={`glass-card border-l-[3px] p-4 sm:p-5 transition-all duration-200 ${border} ${
               isFocused ? "ring-2 ring-[var(--border-active)]" : ""
             } ${r.status !== "review" ? "-translate-y-0.5" : ""}`}
           >
             <div className="flex items-start gap-3 mb-3">
               {isPending && (
                 <input
+                  className="no-print mt-1 rounded border-default"
                   type="checkbox"
                   checked={selected.has(r.id)}
                   onChange={() => toggleOne(r.id)}
                   onClick={(e) => e.stopPropagation()}
-                  className="mt-1 rounded border-default"
                   aria-label={`Select ${bank?.description}`}
                 />
               )}
@@ -160,14 +214,26 @@ export function ReviewQueue({
                   </p>
                 )}
                 <div className="flex flex-wrap items-center gap-3">
-                  <ConfidenceBadge
-                    confidence={r.confidence}
-                    isAIScored={aiScored}
-                    aiReasoning={aiReasoning}
-                  />
+                  <ConfidenceBreakdown match={r} showBar={false} />
+                  <RiskBadge match={r} />
                   <MatchTypeBadge matchType={r.matchType} />
+                  {bank?.description && (
+                    <CategoryBadge description={bank.description} />
+                  )}
+                  {anomalyMap[r.id] && (
+                    <AnomalyFlagBadge reason={anomalyMap[r.id]} />
+                  )}
+                  {fraudMap[r.id] && (
+                    <FraudAlertBadge message={fraudMap[r.id]} />
+                  )}
                 </div>
               </div>
+              {bank && ledger && (
+                <ExplainMatchButton
+                  match={r}
+                  className="no-print shrink-0"
+                />
+              )}
             </div>
 
             {aiScored && aiReasoning && (
@@ -181,10 +247,28 @@ export function ReviewQueue({
                 <p className="text-[10px] uppercase tracking-wide text-muted mb-1">
                   🏦 Bank Statement
                 </p>
-                <p className="text-sm font-semibold text-primary">{bank?.description}</p>
-                <p className="mt-1 text-xs text-secondary tabular-nums">
-                  {bank ? formatDate(bank.date) : "—"} ·{" "}
-                  {bank ? formatPKR(bank.amount) : "—"}
+                <p className="text-sm font-semibold text-primary">
+                  {bank && isBankCharge(bank.description) && (
+                    <span className="mr-1" title="Bank charge / fee">
+                      🏦
+                    </span>
+                  )}
+                  {bank?.description}
+                </p>
+                <p className="mt-1 text-xs text-secondary">
+                  {bank ? formatDate(bank.date) : "—"}
+                  {bank && (
+                    <>
+                      {" · "}
+                      <AmountWithHoverStat
+                        amount={bank.amount}
+                        source="bank"
+                        transactionId={bank.id}
+                        type={bank.type}
+                      />
+                    </>
+                  )}
+                  {!bank && " · —"}
                 </p>
               </div>
               <span className="text-accent text-xl text-center hidden md:block" aria-hidden>
@@ -197,9 +281,20 @@ export function ReviewQueue({
                 <p className="text-sm font-semibold text-primary">
                   {ledger?.description}
                 </p>
-                <p className="mt-1 text-xs text-secondary tabular-nums">
-                  {ledger ? formatDate(ledger.date) : "—"} ·{" "}
-                  {ledger ? formatPKR(ledger.amount) : "—"}
+                <p className="mt-1 text-xs text-secondary">
+                  {ledger ? formatDate(ledger.date) : "—"}
+                  {ledger && (
+                    <>
+                      {" · "}
+                      <AmountWithHoverStat
+                        amount={ledger.amount}
+                        source="ledger"
+                        transactionId={ledger.id}
+                        type={ledger.type}
+                      />
+                    </>
+                  )}
+                  {!ledger && " · —"}
                 </p>
               </div>
             </div>
@@ -210,11 +305,15 @@ export function ReviewQueue({
               </p>
             )}
 
+            {bank && ledger && r.status === "review" && (
+              <ReviewConversation match={r} />
+            )}
+
             {r.status === "review" && (
-              <div className="mt-4 flex justify-end gap-3">
+              <div className="no-print mt-4 hidden md:flex justify-end gap-3">
                 <button
                   type="button"
-                  onClick={() => onUpdate(r.id, "approved")}
+                  onClick={() => recordDecision(r, "approved")}
                   className="rounded-lg border border-[var(--success)] px-4 py-2 text-sm font-medium text-[var(--success)] hover:bg-[var(--success)] hover:text-white transition-all"
                   aria-label="Approve match"
                 >
@@ -222,7 +321,7 @@ export function ReviewQueue({
                 </button>
                 <button
                   type="button"
-                  onClick={() => onUpdate(r.id, "rejected")}
+                  onClick={() => recordDecision(r, "rejected")}
                   className="rounded-lg border border-[var(--danger)] px-4 py-2 text-sm font-medium text-[var(--danger)] hover:bg-[var(--danger)] hover:text-white transition-all"
                   aria-label="Reject match"
                 >
@@ -245,9 +344,27 @@ export function ReviewQueue({
         );
       })}
 
+      <ReviewMobileSheet
+        open={!!mobileSheetId}
+        bankLabel={
+          results.find((x) => x.id === mobileSheetId)?.bankTransaction?.description
+        }
+        onApprove={() => {
+          const m = results.find((x) => x.id === mobileSheetId);
+          if (m) recordDecision(m, "approved");
+          setMobileSheetId(null);
+        }}
+        onReject={() => {
+          const m = results.find((x) => x.id === mobileSheetId);
+          if (m) recordDecision(m, "rejected");
+          setMobileSheetId(null);
+        }}
+        onClose={() => setMobileSheetId(null)}
+      />
+
       {confirm && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(5,10,18,0.6)] p-4 backdrop-blur-sm"
+          className="no-print fixed inset-0 z-50 flex items-center justify-center bg-[rgba(5,10,18,0.6)] p-4 backdrop-blur-sm"
           role="alertdialog"
           aria-modal="true"
         >

@@ -1,6 +1,6 @@
 import OpenAI from "openai";
 
-const BATCH_SIZE = 15;
+const DEFAULT_BATCH_SIZE = 15;
 
 const SYSTEM_PROMPT = `You are a financial reconciliation expert working with Pakistani business transactions.
 
@@ -13,6 +13,36 @@ Consider:
 - Reference numbers that might appear in both descriptions
 - Amounts and dates as supporting evidence (provided for context)
 
+Multilingual descriptions:
+- Bank and ledger text may mix English and Urdu (e.g. ادائیگی = payment, تنخواہ = salary).
+- Translate mentally and match on meaning, not literal script.
+
+Hard rules:
+- Reversals are NOT the same as original transactions. A 'REVERSAL', 'REFUND', or 'CANCELLED' entry is a separate financial event, even if the amount and entity match.
+- Reference numbers and cheque numbers are strong matching signals. If both descriptions contain the same reference number, that's very likely the same transaction regardless of description differences.
+- Date differences of 1-2 days are normal in Pakistani banking due to weekend/holiday processing delays, batch processing (especially salaries), cheque clearing time (2-3 days), and inter-bank transfer delays. Do NOT reduce confidence significantly for 1-2 day offsets.
+- Amount differences under PKR 500 are common due to bank charges deducted at source, withholding tax, and rounding. These small differences should NOT prevent a match.
+
+Common Pakistani abbreviations:
+- NADRA = National Database & Registration Authority
+- FBR = Federal Board of Revenue
+- LESCO = Lahore Electric Supply Company
+- K-ELECTRIC = Karachi Electric
+- WAPDA = Pakistan Water and Power Development Authority
+- PTCL = Pakistan Telecommunication Company
+- SBP = State Bank of Pakistan
+
+Payment platform / bank abbreviations:
+- JAZZCASH, Jazz Cash, JC = same platform (Mobilink Jazz)
+- EASYPAISA, EP = same platform (Telenor)
+- SADAPAY, SP = same platform
+- HBL, Habib Bank = same bank
+- UBL, United Bank = same bank
+- MCB, Muslim Commercial = same bank
+- NIFT = National Institutional Facilitation Technologies (interbank)
+- IBFT = Inter Bank Fund Transfer
+- NEFT = National Electronic Fund Transfer
+
 For each pair, return:
 - confidence: 0-100 (how likely these are the same transaction)
   - 90-100: Almost certainly the same transaction
@@ -20,6 +50,8 @@ For each pair, return:
   - 50-74: Possible match, needs human review
   - 0-49: Unlikely to be the same transaction
 - reasoning: One sentence explaining your judgment
+- matchFactors: object with these keys: entityMatch, amountMatch, dateMatch, referenceMatch, contextMatch
+  - values must be one of: "high", "medium", "low", "none"
 
 IMPORTANT: You MUST respond with ONLY a valid JSON array. No markdown, no backticks, no explanation outside the JSON.`;
 
@@ -37,13 +69,20 @@ export interface FuzzyMatchScore {
   id: string;
   confidence: number;
   reasoning: string;
+  matchFactors?: {
+    entityMatch: "high" | "medium" | "low" | "none";
+    amountMatch: "high" | "medium" | "low" | "none";
+    dateMatch: "high" | "medium" | "low" | "none";
+    referenceMatch: "high" | "medium" | "low" | "none";
+    contextMatch: "high" | "medium" | "low" | "none";
+  };
 }
 
 export function isOpenAIConfigured(): boolean {
   return !!process.env.OPENAI_API_KEY;
 }
 
-function getOpenAIClient(): OpenAI {
+export function getOpenAIClient(): OpenAI {
   return new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
   });
@@ -66,11 +105,22 @@ ${numbered}
 
 Return JSON array (use the exact id string for each pair):
 [
-  { "id": "pair-id-here", "confidence": 87, "reasoning": "Same entity - M AHMED is abbreviated Muhammad Ahmed" }
+  {
+    "id": "pair-id-here",
+    "confidence": 87,
+    "reasoning": "Same entity - M AHMED is abbreviated Muhammad Ahmed",
+    "matchFactors": {
+      "entityMatch": "high",
+      "amountMatch": "high",
+      "dateMatch": "medium",
+      "referenceMatch": "none",
+      "contextMatch": "medium"
+    }
+  }
 ]`;
 }
 
-function stripMarkdownFences(content: string): string {
+export function stripMarkdownFences(content: string): string {
   let text = content.trim();
   if (text.startsWith("```")) {
     text = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "");
@@ -86,6 +136,33 @@ function isScoreItem(value: unknown): value is FuzzyMatchScore {
     typeof obj.confidence === "number" &&
     typeof obj.reasoning === "string"
   );
+}
+
+function normalizeFactor(value: unknown): "high" | "medium" | "low" | "none" {
+  if (typeof value !== "string") return "none";
+  const v = value.toLowerCase();
+  if (v === "high") return "high";
+  if (v === "medium") return "medium";
+  if (v === "low") return "low";
+  if (v === "none") return "none";
+  // Back-compat: earlier prompt examples used exact/close
+  if (v === "exact") return "high";
+  if (v === "close") return "medium";
+  return "none";
+}
+
+function parseMatchFactors(
+  value: unknown
+): FuzzyMatchScore["matchFactors"] | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const obj = value as Record<string, unknown>;
+  return {
+    entityMatch: normalizeFactor(obj.entityMatch),
+    amountMatch: normalizeFactor(obj.amountMatch),
+    dateMatch: normalizeFactor(obj.dateMatch),
+    referenceMatch: normalizeFactor(obj.referenceMatch),
+    contextMatch: normalizeFactor(obj.contextMatch),
+  };
 }
 
 function parseScoresFromJson(
@@ -112,10 +189,12 @@ function parseScoresFromJson(
   const byId = new Map<string, FuzzyMatchScore>();
   for (const item of items) {
     if (!isScoreItem(item)) continue;
+    const factors = parseMatchFactors((item as { matchFactors?: unknown }).matchFactors);
     byId.set(item.id, {
       id: item.id,
       confidence: clampConfidence(item.confidence),
       reasoning: item.reasoning.trim() || "AI match assessment",
+      matchFactors: factors,
     });
   }
 
@@ -202,7 +281,8 @@ async function scoreBatch(
 }
 
 export async function scoreFuzzyMatches(
-  pairs: FuzzyMatchPair[]
+  pairs: FuzzyMatchPair[],
+  batchSize: number = DEFAULT_BATCH_SIZE
 ): Promise<FuzzyMatchScore[]> {
   if (pairs.length === 0) return [];
 
@@ -213,10 +293,11 @@ export async function scoreFuzzyMatches(
     );
   }
 
+  const size = Math.min(30, Math.max(1, batchSize));
   const allScores: FuzzyMatchScore[] = [];
 
-  for (let i = 0; i < pairs.length; i += BATCH_SIZE) {
-    const batch = pairs.slice(i, i + BATCH_SIZE);
+  for (let i = 0; i < pairs.length; i += size) {
+    const batch = pairs.slice(i, i + size);
     const batchScores = await scoreBatch(batch, false);
     allScores.push(...batchScores);
   }

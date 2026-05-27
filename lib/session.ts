@@ -1,3 +1,4 @@
+import type { SessionAuditMeta } from "./audit-certificate";
 import type {
   BankTransaction,
   JournalPost,
@@ -6,6 +7,8 @@ import type {
   MissingEntryProposal,
   ReconciliationSummary,
 } from "./types";
+
+export type { SessionAuditMeta };
 
 const STORAGE_KEY = "reconciliation-session";
 const SESSION_ID_KEY = "reconciliation-session-id";
@@ -26,6 +29,7 @@ export interface SessionData {
   missingProposals: MissingEntryProposal[];
   journalPosts: JournalPost[];
   aiMeta?: SessionAIMeta;
+  auditMeta?: SessionAuditMeta;
 }
 
 export function saveSessionId(id: string): void {

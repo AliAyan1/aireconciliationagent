@@ -11,8 +11,9 @@ export function MatchTypeBadge({ matchType }: { matchType: MatchType }) {
       "border-[rgba(139,92,246,0.4)] text-[var(--purple)] bg-[rgba(139,92,246,0.08)]",
     generated:
       "border-[rgba(139,92,246,0.4)] text-[var(--purple)] bg-[rgba(139,92,246,0.08)]",
-    unmatched:
-      "border-default text-muted bg-card",
+    unmatched: "border-default text-muted bg-card",
+    manual:
+      "border-[rgba(16,185,129,0.6)] text-[var(--success)] bg-[rgba(16,185,129,0.12)]",
   };
 
   const labels: Record<MatchType, string> = {
@@ -22,6 +23,7 @@ export function MatchTypeBadge({ matchType }: { matchType: MatchType }) {
     ai_scored: "✦ AI",
     generated: "Generated",
     unmatched: "—",
+    manual: "👤 Manual",
   };
 
   return (

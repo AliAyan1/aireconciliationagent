@@ -1,7 +1,7 @@
 "use client";
 
 import type { JournalPost, MatchResult } from "@/lib/types";
-import { formatPKR } from "@/lib/format";
+import { AmountWithHoverStat } from "./AmountWithHoverStat";
 import { getPostableMatches } from "@/lib/entries";
 
 interface PostEntriesPanelProps {
@@ -45,9 +45,16 @@ export function PostEntriesPanel({
               className="text-xs text-secondary truncate border-t border-default pt-2"
             >
               {r.bankTransaction?.description} ·{" "}
-              <span className="tabular-nums">
-                {formatPKR(r.bankTransaction?.amount ?? 0)}
-              </span>
+              {r.bankTransaction ? (
+                <AmountWithHoverStat
+                  amount={r.bankTransaction.amount}
+                  source="bank"
+                  transactionId={r.bankTransaction.id}
+                  type={r.bankTransaction.type}
+                />
+              ) : (
+                "—"
+              )}
             </li>
           ))}
           {postable.length > 5 && (

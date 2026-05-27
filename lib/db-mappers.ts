@@ -58,6 +58,7 @@ export function toDbMatchType(type: MatchType): DbMatchType {
     ai_scored: "AI_SCORED",
     unmatched: "UNMATCHED",
     generated: "GENERATED",
+    manual: "EXACT", // manual matches stored as EXACT in DB
   };
   return map[type];
 }

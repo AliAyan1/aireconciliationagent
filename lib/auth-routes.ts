@@ -4,7 +4,13 @@ export function homePathForRole(role: AuthRole): string {
   return role === "ADMIN" ? "/admin" : "/upload";
 }
 
-const TEAM_PATH_PREFIXES = ["/upload", "/dashboard", "/history"] as const;
+const TEAM_PATH_PREFIXES = [
+  "/upload",
+  "/dashboard",
+  "/history",
+  "/compare",
+  "/test",
+] as const;
 
 export function pathAllowedForRole(path: string, role: AuthRole): boolean {
   if (role === "ADMIN") {

@@ -8,6 +8,7 @@ import {
   isMatchAIScored,
 } from "@/lib/ai-display";
 import { ConfidenceBadge } from "./ConfidenceBadge";
+import type { AIScoreMetadata } from "@/lib/types";
 
 export interface AIInsightsPanelProps {
   aiPairsScored: number;
@@ -19,6 +20,48 @@ export interface AIInsightsPanelProps {
 function formatProcessingTime(ms: number): string {
   if (ms < 1000) return `${ms}ms`;
   return `${(ms / 1000).toFixed(1)}s`;
+}
+
+function factorDotColor(value: string | undefined): string {
+  if (value === "high") return "bg-[var(--success)]";
+  if (value === "medium") return "bg-[var(--warning)]";
+  if (value === "low") return "bg-[var(--danger)]";
+  return "bg-slate-600";
+}
+
+function MatchFactorsRow({
+  factors,
+}: {
+  factors: NonNullable<AIScoreMetadata["matchFactors"]> | null | undefined;
+}) {
+  if (!factors) return null;
+  const items: Array<{
+    key: keyof NonNullable<AIScoreMetadata["matchFactors"]>;
+    label: string;
+  }> = [
+    { key: "entityMatch", label: "Entity" },
+    { key: "amountMatch", label: "Amount" },
+    { key: "dateMatch", label: "Date" },
+    { key: "referenceMatch", label: "Ref" },
+    { key: "contextMatch", label: "Context" },
+  ];
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
+      {items.map((item) => {
+        const v = factors[item.key];
+        return (
+          <span key={item.key} className="inline-flex items-center gap-1.5">
+            <span
+              className={`h-2 w-2 rounded-full ${factorDotColor(v)}`}
+              title={`${item.label}: ${v}`}
+              aria-hidden
+            />
+            {item.label}
+          </span>
+        );
+      })}
+    </div>
+  );
 }
 
 export function AIInsightsPanel({
@@ -119,6 +162,7 @@ export function AIInsightsPanel({
                       aiReasoning={reasoning}
                     />
                     <span className="text-xs text-slate-500">{statusLabel}</span>
+                    <MatchFactorsRow factors={r.aiMetadata?.matchFactors} />
                     {reasoning && (
                       <p className="w-full text-xs text-slate-500 line-clamp-2">
                         {reasoning}

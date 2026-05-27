@@ -1,0 +1,4 @@
+Date,Description,Amount,Type,Reference,Invoice_No
+2026-05-01,Metro Cash and Carry,4500,debit,REF1,INV-1
+2026-05-02,Metro Cash and Carry,4500,debit,REF2,INV-2
+2026-05-03,Metro Cash and Carry,4500,debit,REF3,INV-3

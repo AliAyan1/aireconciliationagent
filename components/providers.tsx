@@ -2,6 +2,8 @@
 
 import { ThemeProvider } from "next-themes";
 import { Toaster } from "react-hot-toast";
+import { DisplayPreferencesInit } from "./providers/DisplayPreferencesInit";
+import { SessionExpiryWarning } from "./security/SessionExpiryWarning";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
@@ -11,7 +13,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
       enableSystem={false}
       storageKey="hisaabai-theme"
     >
-      {children}
+      <DisplayPreferencesInit>
+        {children}
+        <SessionExpiryWarning />
+      </DisplayPreferencesInit>
       <Toaster
         position="bottom-right"
         toastOptions={{

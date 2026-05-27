@@ -5,17 +5,24 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import { BrandLogo } from "./BrandLogo";
+import { SoundMuteToggle } from "./SoundMuteToggle";
 import { ThemeToggle } from "./ThemeToggle";
+import {
+  NotificationBell,
+  type DashboardNotification,
+} from "./dashboard/NotificationBell";
 import type { AuthRole } from "@/lib/auth-types";
 
 interface SiteHeaderProps {
-  active?: "home" | "upload" | "dashboard" | "history" | "admin";
+  active?: "home" | "upload" | "dashboard" | "history" | "compare" | "admin";
   role?: AuthRole;
+  notifications?: DashboardNotification[];
 }
 
 const teamLinks = [
   { href: "/upload", label: "Upload", key: "upload" as const },
   { href: "/dashboard", label: "Dashboard", key: "dashboard" as const },
+  { href: "/compare", label: "Compare", key: "compare" as const },
   { href: "/history", label: "History", key: "history" as const },
 ];
 
@@ -47,7 +54,7 @@ function NavLink({
   );
 }
 
-export function SiteHeader({ active, role }: SiteHeaderProps) {
+export function SiteHeader({ active, role, notifications }: SiteHeaderProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [userName, setUserName] = useState<string | null>(null);
@@ -83,7 +90,7 @@ export function SiteHeader({ active, role }: SiteHeaderProps) {
   }
 
   return (
-    <header className="sticky top-0 z-50 border-b border-default bg-primary/90 backdrop-blur-md">
+    <header className="sticky top-0 z-50 border-b border-default bg-primary/90 backdrop-blur-md no-print">
       <div className="mx-auto flex max-w-[1200px] items-center gap-3 px-4 py-3 md:px-8">
         <Link href={homeHref} className="flex shrink-0 items-center">
           <BrandLogo size="md" />
@@ -121,6 +128,10 @@ export function SiteHeader({ active, role }: SiteHeaderProps) {
             <span className="hidden lg:inline text-xs text-secondary max-w-[120px] truncate">
               {userName}
             </span>
+          )}
+          <SoundMuteToggle />
+          {notifications !== undefined && (
+            <NotificationBell notifications={notifications} />
           )}
           <ThemeToggle />
           {role ? (

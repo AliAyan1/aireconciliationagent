@@ -36,12 +36,20 @@ export type MatchType =
   | "fuzzy"
   | "ai_scored"
   | "generated"
-  | "unmatched";
+  | "unmatched"
+  | "manual";
 
 export interface AIScoreMetadata {
   aiScored: boolean;
   aiConfidence: number | null;
   aiReasoning: string | null;
+  matchFactors?: {
+    entityMatch: "high" | "medium" | "low" | "none";
+    amountMatch: "high" | "medium" | "low" | "none";
+    dateMatch: "high" | "medium" | "low" | "none";
+    referenceMatch: "high" | "medium" | "low" | "none";
+    contextMatch: "high" | "medium" | "low" | "none";
+  } | null;
   scoredAt: string | null;
 }
 

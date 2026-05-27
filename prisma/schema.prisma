@@ -55,6 +55,7 @@ model ReconciliationSession {
   matchResults          MatchResult[]
   journalPosts          JournalPost[]
   missingProposals      MissingEntryProposal[]
+  reportExports         ReportExport[]
 
   @@index([createdAt])
   @@index([status])
@@ -242,4 +243,31 @@ enum ProposalStatus {
   APPROVED
   REJECTED
   POSTED
+}
+
+model ReportExport {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  sessionId String
+  session   ReconciliationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  version   Int
+  format    String
+  note      String?
+  matchRate Float?
+
+  @@index([sessionId])
+  @@index([sessionId, createdAt])
+}
+
+model ShareLink {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  sessionId String?
+  payload   Json
+  createdBy String?
+
+  @@index([token])
+  @@index([expiresAt])
 }

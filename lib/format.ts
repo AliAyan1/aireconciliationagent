@@ -1,16 +1,68 @@
+import {
+  getDisplayPreferences,
+  type DateFormatId,
+} from "./display-preferences";
+
+const CURRENCY_LOCALE: Record<string, string> = {
+  PKR: "en-PK",
+  USD: "en-US",
+  EUR: "de-DE",
+  AED: "en-AE",
+  SAR: "ar-SA",
+  GBP: "en-GB",
+};
+
+export function formatMoney(amount: number): string {
+  const { currency } = getDisplayPreferences();
+  const locale = CURRENCY_LOCALE[currency] ?? "en-PK";
+  const value = Math.abs(amount).toLocaleString(locale, {
+    maximumFractionDigits: 2,
+  });
+  return `${currency} ${value}`;
+}
+
+/** @deprecated Use formatMoney — kept for compatibility */
 export function formatPKR(amount: number): string {
-  const value = Math.abs(amount).toLocaleString("en-PK");
-  return `PKR ${value}`;
+  return formatMoney(amount);
+}
+
+function formatWithPattern(d: Date, fmt: DateFormatId): string {
+  const y = d.getFullYear();
+  const m = d.getMonth();
+  const day = d.getDate();
+  const months = [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
+  ];
+  const pad = (n: number) => String(n).padStart(2, "0");
+
+  switch (fmt) {
+    case "iso":
+      return `${y}-${pad(m + 1)}-${pad(day)}`;
+    case "dmy":
+      return `${pad(day)}/${pad(m + 1)}/${y}`;
+    case "mdy":
+      return `${pad(m + 1)}/${pad(day)}/${y}`;
+    case "dmon":
+    default:
+      return `${pad(day)}-${months[m]}-${y}`;
+  }
 }
 
 export function formatDate(dateStr: string): string {
   const d = new Date(dateStr);
   if (Number.isNaN(d.getTime())) return dateStr;
-  return d.toLocaleDateString("en-PK", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
+  return formatWithPattern(d, getDisplayPreferences().dateFormat);
 }
 
 /** e.g. "Just now", "2 minutes ago", "1 hour ago" */

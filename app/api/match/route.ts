@@ -14,6 +14,7 @@ import {
   saveMatchResults,
   updateSessionSummary,
 } from "@/lib/db-helpers";
+import { mergeMatchingConfig, type MatchingConfig } from "@/lib/matching-config";
 import { getSummary, runMatching } from "@/lib/matcher";
 import { isOpenAIConfigured } from "@/lib/openai";
 import type { BankTransaction, LedgerEntry } from "@/lib/types";
@@ -24,6 +25,7 @@ interface MatchRequestBody {
   bankFileName?: string;
   ledgerFileName?: string;
   sessionName?: string;
+  matchingConfig?: Partial<MatchingConfig>;
 }
 
 export async function POST(request: Request) {
@@ -39,20 +41,25 @@ export async function POST(request: Request) {
       );
     }
 
-    // Phases 1–4: rule-based matching (unchanged)
+    const matchingConfig = mergeMatchingConfig(body.matchingConfig);
+
     const rulesStart = Date.now();
-    let results = runMatching(body.bankData, body.ledgerData);
+    let results = runMatching(
+      body.bankData,
+      body.ledgerData,
+      matchingConfig
+    );
     const rulesProcessingTimeMs = Date.now() - rulesStart;
 
-    // Phase 5: AI semantic scoring (optional; failures return rule-based results)
-    const aiScoringAvailable = isOpenAIConfigured();
+    const aiScoringAvailable =
+      matchingConfig.enableAiScoring && isOpenAIConfigured();
     let aiPairsScored = 0;
     let aiCandidateCount = 0;
     let aiProcessingTimeMs = 0;
 
     if (aiScoringAvailable) {
       const aiStart = Date.now();
-      const aiOutput = await applyAiScoresToResults(results);
+      const aiOutput = await applyAiScoresToResults(results, matchingConfig);
       results = aiOutput.results;
       aiPairsScored = aiOutput.pairsScored;
       aiCandidateCount = aiOutput.candidateCount;

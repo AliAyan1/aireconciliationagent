@@ -1,4 +1,8 @@
 import {
+  DEFAULT_MATCHING_CONFIG,
+  type MatchingConfig,
+} from "./matching-config";
+import {
   applyAIScores,
   getAIScoringCandidates,
 } from "./matcher";
@@ -7,14 +11,15 @@ import type { MatchResult } from "./types";
 
 /** Run Phase 5 AI scoring on rule-based results (non-blocking on failure). */
 export async function applyAiScoresToResults(
-  results: MatchResult[]
+  results: MatchResult[],
+  config: MatchingConfig = DEFAULT_MATCHING_CONFIG
 ): Promise<{
   results: MatchResult[];
   aiUsed: boolean;
   pairsScored: number;
   candidateCount: number;
 }> {
-  if (!isOpenAIConfigured()) {
+  if (!config.enableAiScoring || !isOpenAIConfigured()) {
     return {
       results,
       aiUsed: false,
@@ -23,7 +28,7 @@ export async function applyAiScoresToResults(
     };
   }
 
-  const candidates = getAIScoringCandidates(results);
+  const candidates = getAIScoringCandidates(results, config);
   if (candidates.length === 0) {
     return {
       results,
@@ -34,8 +39,8 @@ export async function applyAiScoresToResults(
   }
 
   try {
-    const scores = await scoreFuzzyMatches(candidates);
-    const updated = applyAIScores(results, scores);
+    const scores = await scoreFuzzyMatches(candidates, config.aiBatchSize);
+    const updated = applyAIScores(results, scores, config);
     return {
       results: updated,
       aiUsed: true,

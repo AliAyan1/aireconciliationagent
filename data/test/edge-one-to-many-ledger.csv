@@ -1,0 +1,4 @@
+Date,Description,Amount,Type,Reference,Invoice_No
+2026-05-01,Supplier Part A,40000,debit,REF1,INV-1
+2026-05-01,Supplier Part B,35000,debit,REF2,INV-2
+2026-05-01,Supplier Part C,25000,debit,REF3,INV-3

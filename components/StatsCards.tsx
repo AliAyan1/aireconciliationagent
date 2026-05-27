@@ -1,8 +1,10 @@
 "use client";
 
+import type { ReactNode } from "react";
 import type { ReconciliationSummary } from "@/lib/types";
 import { formatPKR } from "@/lib/format";
 import { useAnimatedNumber } from "@/hooks/useAnimatedNumber";
+import { TiltCard } from "@/components/TiltCard";
 
 interface StatsCardsProps {
   summary: ReconciliationSummary;
@@ -20,10 +22,25 @@ function StatValue({
   animate: boolean;
   className: string;
 }) {
-  const display = useAnimatedNumber(value, 800, animate);
+  const display = useAnimatedNumber(value, 1000, animate);
   return (
     <p className={`text-2xl sm:text-[32px] font-bold tabular-nums leading-none ${className}`}>
       {display}
+    </p>
+  );
+}
+
+function MatchRateSubtitle({
+  rate,
+  animate,
+}: {
+  rate: number;
+  animate: boolean;
+}) {
+  const display = useAnimatedNumber(rate, 1000, animate);
+  return (
+    <p className="mt-1 text-[10px] sm:text-xs text-muted">
+      {display}% match rate
     </p>
   );
 }
@@ -37,7 +54,7 @@ export function StatsCards({
   const cards: {
     label: string;
     value: number;
-    subtitle: string;
+    subtitle: ReactNode;
     accent: string;
     valueColor: string;
     animateValue: boolean;
@@ -53,7 +70,9 @@ export function StatsCards({
     {
       label: "Auto Matched",
       value: summary.autoMatched,
-      subtitle: `${summary.matchRate}% match rate`,
+      subtitle: (
+        <MatchRateSubtitle rate={summary.matchRate} animate={animate} />
+      ),
       accent: "border-l-[var(--success)]",
       valueColor: "text-[var(--success)]",
       animateValue: true,
@@ -103,20 +122,25 @@ export function StatsCards({
   return (
     <div className={`grid gap-3 sm:gap-4 ${gridClass}`}>
       {cards.map((card) => (
-        <div
-          key={card.label}
-          className={`card-surface border-l-[3px] p-4 sm:p-5 hover:-translate-y-0.5 hover:border-hover ${card.accent}`}
-        >
-          <StatValue
-            value={card.value}
-            animate={animate && card.animateValue}
-            className={card.valueColor}
-          />
-          <p className="mt-2 text-[10px] sm:text-xs font-semibold uppercase tracking-wide text-secondary">
-            {card.label}
-          </p>
-          <p className="mt-1 text-[10px] sm:text-xs text-muted">{card.subtitle}</p>
-        </div>
+        <TiltCard key={card.label}>
+          <div
+            className={`glass-card border-l-[3px] p-4 sm:p-5 hover:border-hover ${card.accent}`}
+          >
+            <StatValue
+              value={card.value}
+              animate={animate && card.animateValue}
+              className={card.valueColor}
+            />
+            <p className="mt-2 text-[10px] sm:text-xs font-semibold uppercase tracking-wide text-secondary">
+              {card.label}
+            </p>
+            {typeof card.subtitle === "string" ? (
+              <p className="mt-1 text-[10px] sm:text-xs text-muted">{card.subtitle}</p>
+            ) : (
+              card.subtitle
+            )}
+          </div>
+        </TiltCard>
       ))}
     </div>
   );

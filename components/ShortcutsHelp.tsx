@@ -1,13 +1,16 @@
 "use client";
 
 import { useState } from "react";
+import { DASHBOARD_NAV } from "@/lib/dashboard-nav";
 
 const SHORTCUTS = [
-  { keys: "1 – 5", desc: "Switch dashboard tabs" },
+  { keys: "1 – 8", desc: "Switch dashboard sections" },
   { keys: "A", desc: "Approve focused review item" },
   { keys: "R", desc: "Reject focused review item" },
-  { keys: "E", desc: "Download CSV report" },
-  { keys: "Esc", desc: "Close expanded table row" },
+  { keys: "E", desc: "Export CSV report" },
+  { keys: "/", desc: "Focus dashboard search" },
+  { keys: "Esc", desc: "Close expanded row / dialogs" },
+  { keys: "?", desc: "Show this help panel" },
 ];
 
 export function ShortcutsHelp() {
@@ -18,7 +21,7 @@ export function ShortcutsHelp() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="fixed bottom-6 right-6 z-40 flex h-11 w-11 items-center justify-center rounded-full border border-default bg-elevated text-secondary shadow-[var(--shadow-elevated)] hover:text-accent hover:border-active transition-all duration-200"
+        className="no-print fixed bottom-6 right-6 z-40 flex h-11 w-11 items-center justify-center rounded-full border border-default bg-elevated text-secondary shadow-[var(--shadow-elevated)] hover:text-accent hover:border-active transition-all duration-200"
         aria-label="Keyboard shortcuts"
       >
         ?
@@ -63,7 +66,8 @@ export function ShortcutsHelp() {
               ))}
             </ul>
             <p className="mt-4 text-xs text-muted">
-              Shortcuts work when not typing in a search field.
+              Tabs: {DASHBOARD_NAV.map((n) => n.label).join(" · ")}. Shortcuts
+              are disabled while typing in a field.
             </p>
           </div>
         </div>

@@ -50,7 +50,7 @@ export function ActivityFeed() {
 
   return (
     <div
-      className="mt-10 w-full max-w-lg mx-auto text-left card-surface px-5 py-4 border border-default"
+      className="mt-10 w-full max-w-lg mx-auto text-left glass-card px-5 py-4"
       aria-live="polite"
       aria-atomic="true"
     >

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 
 export function useAnimatedNumber(
   target: number,
-  durationMs = 800,
+  durationMs = 1000,
   enabled = true
 ): number {
   const [value, setValue] = useState(0);

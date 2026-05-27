@@ -3,7 +3,7 @@ import type { NextRequest } from "next/server";
 import { homePathForRole, parseLoginIntent } from "@/lib/auth-routes";
 import { SESSION_COOKIE, verifyAuthToken } from "@/lib/auth-token";
 
-const TEAM_PREFIXES = ["/upload", "/dashboard", "/history"];
+const TEAM_PREFIXES = ["/upload", "/dashboard", "/history", "/compare", "/test"];
 const ADMIN_PREFIXES = ["/admin"];
 
 const TEAM_API_PREFIXES = [
@@ -13,6 +13,14 @@ const TEAM_API_PREFIXES = [
   "/api/generate-missing",
   "/api/export",
   "/api/ai-score",
+  "/api/ai",
+  "/api/analytics",
+  "/api/evaluate",
+  "/api/test-run",
+  "/api/share",
+  "/api/user/delete-data",
+  "/api/journal-export",
+  "/api/export-versions",
 ];
 
 function startsWithAny(path: string, prefixes: string[]) {
@@ -49,6 +57,13 @@ export async function middleware(request: NextRequest) {
   }
 
   if (pathname.startsWith("/api/")) {
+    if (
+      request.method === "GET" &&
+      /^\/api\/share\/[^/]+$/.test(pathname)
+    ) {
+      return NextResponse.next();
+    }
+
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }

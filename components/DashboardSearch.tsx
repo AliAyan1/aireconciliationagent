@@ -20,6 +20,7 @@ export function DashboardSearch({
       <div className="relative flex-1 max-w-xl">
         <input
           type="search"
+          data-dashboard-search
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder="Search descriptions, amounts, references, dates…"

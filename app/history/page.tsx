@@ -51,9 +51,14 @@ export default function HistoryPage() {
               Past sessions stored in PostgreSQL
             </p>
           </div>
-          <Link href="/upload" className="text-sm text-sky-400 hover:text-sky-300">
-            New upload →
-          </Link>
+          <div className="flex gap-4 text-sm">
+            <Link href="/compare" className="text-sky-400 hover:text-sky-300">
+              Compare periods →
+            </Link>
+            <Link href="/upload" className="text-sky-400 hover:text-sky-300">
+              New upload →
+            </Link>
+          </div>
         </div>
 
         {loading && (

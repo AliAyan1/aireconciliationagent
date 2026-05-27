@@ -260,6 +260,304 @@ body {
   border-color: var(--border-hover);
 }
 
+/* Glassmorphism — stats, review, upload zones */
+.glass-card {
+  background: rgba(15, 23, 42, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  transition: all 0.2s ease;
+}
+.glass-card:hover {
+  border-color: rgba(255, 255, 255, 0.1);
+}
+[data-theme="light"] .glass-card {
+  background: rgba(255, 255, 255, 0.75);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+}
+[data-theme="light"] .glass-card:hover {
+  border-color: rgba(15, 23, 42, 0.12);
+}
+
+/* Animated gradient mesh (landing) */
+.gradient-mesh {
+  z-index: 0;
+}
+.gradient-mesh-blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.04;
+  will-change: transform;
+}
+.gradient-mesh-blob-sky {
+  width: min(70vw, 520px);
+  height: min(70vw, 520px);
+  top: -10%;
+  left: -5%;
+  background: radial-gradient(circle, #38bdf8 0%, transparent 70%);
+  animation: mesh-drift-1 28s ease-in-out infinite;
+}
+.gradient-mesh-blob-purple {
+  width: min(60vw, 480px);
+  height: min(60vw, 480px);
+  top: 40%;
+  right: -8%;
+  background: radial-gradient(circle, #8b5cf6 0%, transparent 70%);
+  animation: mesh-drift-2 32s ease-in-out infinite;
+}
+.gradient-mesh-blob-emerald {
+  width: min(55vw, 440px);
+  height: min(55vw, 440px);
+  bottom: -5%;
+  left: 30%;
+  background: radial-gradient(circle, #10b981 0%, transparent 70%);
+  animation: mesh-drift-3 24s ease-in-out infinite;
+}
+@keyframes mesh-drift-1 {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(8%, 12%) scale(1.08);
+  }
+}
+@keyframes mesh-drift-2 {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(-10%, -8%) scale(1.05);
+  }
+}
+@keyframes mesh-drift-3 {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(6%, -10%) scale(1.1);
+  }
+}
+
+/* Hero particles */
+.particle-field {
+  z-index: 1;
+}
+.particle-dot {
+  position: absolute;
+  bottom: -10px;
+  border-radius: 50%;
+  background: rgba(56, 189, 248, 0.1);
+  animation-name: particle-float;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+@keyframes particle-float {
+  0% {
+    transform: translateY(0);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 0.6;
+  }
+  100% {
+    transform: translateY(-100vh);
+    opacity: 0;
+  }
+}
+
+/* Spinning gradient border button */
+@keyframes rotate-border {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.btn-gradient-spin {
+  position: relative;
+  display: inline-flex;
+  padding: 2px;
+  border-radius: 10px;
+  overflow: hidden;
+  text-decoration: none;
+}
+.btn-gradient-spin::before {
+  content: "";
+  position: absolute;
+  inset: -50%;
+  background: conic-gradient(
+    from 0deg,
+    #38bdf8,
+    #818cf8,
+    #10b981,
+    #38bdf8
+  );
+  animation: rotate-border 3s linear infinite;
+}
+.btn-gradient-spin-inner {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #0ea5e9 0%, #6366f1 100%);
+  box-shadow: var(--shadow-glow);
+  transition: filter 0.2s ease;
+}
+.btn-gradient-spin:hover .btn-gradient-spin-inner {
+  filter: brightness(1.06);
+}
+.btn-gradient-spin:disabled::before {
+  animation: none;
+}
+
+/* Typewriter hero */
+.typewriter-headline {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: baseline;
+  max-width: 700px;
+}
+.typewriter-text::before {
+  content: attr(data-text);
+  display: inline-block;
+  overflow: hidden;
+  white-space: nowrap;
+  width: 0;
+  vertical-align: bottom;
+  animation: typewriter-reveal var(--typewriter-duration, 2.8s)
+    steps(var(--typewriter-chars, 50)) forwards;
+}
+.typewriter-cursor {
+  display: inline-block;
+  width: 3px;
+  height: 0.85em;
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  background: var(--accent);
+  opacity: 0;
+  animation:
+    typewriter-cursor-show 0.01s forwards,
+    blink-cursor 0.8s step-end infinite;
+  animation-delay: var(--typewriter-duration, 2.8s), var(--typewriter-duration, 2.8s);
+}
+@keyframes typewriter-reveal {
+  from {
+    width: 0;
+  }
+  to {
+    width: 100%;
+  }
+}
+@keyframes typewriter-cursor-show {
+  to {
+    opacity: 1;
+  }
+}
+@keyframes blink-cursor {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
+/* Scroll reveal */
+.scroll-reveal:not(.scroll-reveal-stagger) {
+  opacity: 0;
+  transform: translateY(20px);
+  transition:
+    opacity 0.55s ease-out,
+    transform 0.55s ease-out;
+}
+.scroll-reveal.scroll-reveal-visible:not(.scroll-reveal-stagger),
+.scroll-reveal-visible.scroll-reveal-item {
+  opacity: 1;
+  transform: translateY(0);
+}
+.scroll-reveal-stagger .scroll-reveal-item {
+  opacity: 0;
+  transform: translateY(20px);
+  transition:
+    opacity 0.55s ease-out,
+    transform 0.55s ease-out;
+}
+.scroll-reveal-stagger .scroll-reveal-item:nth-child(1) {
+  transition-delay: 0ms;
+}
+.scroll-reveal-stagger .scroll-reveal-item:nth-child(2) {
+  transition-delay: 50ms;
+}
+.scroll-reveal-stagger .scroll-reveal-item:nth-child(3) {
+  transition-delay: 100ms;
+}
+.scroll-reveal-stagger .scroll-reveal-item:nth-child(4) {
+  transition-delay: 150ms;
+}
+.scroll-reveal-stagger .scroll-reveal-item:nth-child(5) {
+  transition-delay: 200ms;
+}
+.scroll-reveal-stagger .scroll-reveal-item:nth-child(6) {
+  transition-delay: 250ms;
+}
+
+/* Landing custom cursor */
+body.landing-custom-cursor,
+body.landing-custom-cursor * {
+  cursor: none !important;
+}
+.landing-cursor-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #38bdf8;
+  box-shadow:
+    0 0 12px rgba(56, 189, 248, 0.8),
+    0 0 24px rgba(56, 189, 248, 0.4);
+}
+@media (pointer: coarse) {
+  body.landing-custom-cursor,
+  body.landing-custom-cursor * {
+    cursor: auto !important;
+  }
+  .landing-cursor-dot {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gradient-mesh-blob,
+  .particle-dot,
+  .btn-gradient-spin::before {
+    animation: none !important;
+  }
+  .scroll-reveal,
+  .scroll-reveal-stagger .scroll-reveal-item {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  .typewriter-text::before {
+    width: 100% !important;
+    animation: none !important;
+  }
+  .typewriter-cursor {
+    opacity: 1 !important;
+    animation: none !important;
+  }
+}
+
 .gradient-border {
   position: relative;
   background: var(--bg-card);
@@ -310,4 +608,220 @@ body {
     black 20%,
     transparent 70%
   );
+}
+
+/* ——— Print-friendly reconciliation report ——— */
+@media print {
+  @page {
+    size: A4;
+    margin: 1.25cm 1.5cm;
+  }
+
+  :root,
+  [data-theme="light"] {
+    --bg-primary: #ffffff;
+    --bg-card: #ffffff;
+    --bg-card-hover: #ffffff;
+    --bg-elevated: #ffffff;
+    --bg-input: #ffffff;
+    --border-default: #cbd5e1;
+    --border-hover: #94a3b8;
+    --text-primary: #000000;
+    --text-secondary: #1e293b;
+    --text-muted: #475569;
+    --text-accent: #0f172a;
+    --success: #047857;
+    --warning: #b45309;
+    --danger: #b91c1c;
+    --purple: #6d28d9;
+    --accent: #0f172a;
+  }
+
+  html,
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-size: 10pt;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .print-only {
+    display: block !important;
+  }
+
+  .print-break-before {
+    break-before: page;
+    page-break-before: always;
+  }
+
+  .print-avoid-break {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .print-report-header {
+    margin-bottom: 1rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 2px solid #000000;
+  }
+
+  .print-report-header h1 {
+    font-size: 16pt;
+    font-weight: 700;
+    color: #000000;
+    margin: 0 0 0.25rem;
+  }
+
+  .print-report-header p {
+    font-size: 9pt;
+    color: #334155;
+    margin: 0.15rem 0;
+  }
+
+  .print-section-heading {
+    font-size: 12pt;
+    font-weight: 700;
+    color: #000000;
+    margin: 1.25rem 0 0.5rem;
+    padding-bottom: 0.25rem;
+    border-bottom: 1px solid #94a3b8;
+  }
+
+  /* Flatten surfaces for ink-friendly output */
+  .bg-primary,
+  .bg-card,
+  .bg-card-hover,
+  .bg-elevated,
+  .bg-input,
+  .card-surface,
+  .input-field {
+    background: #ffffff !important;
+    box-shadow: none !important;
+  }
+
+  .card-surface,
+  .border-default,
+  table,
+  th,
+  td {
+    border-color: #cbd5e1 !important;
+  }
+
+  .text-primary,
+  .text-secondary,
+  .text-muted,
+  .text-accent,
+  p,
+  span,
+  td,
+  th {
+    color: #000000 !important;
+  }
+
+  .text-secondary,
+  .text-muted {
+    color: #334155 !important;
+  }
+
+  .btn-primary,
+  .btn-ghost,
+  .gradient-border::before {
+    box-shadow: none !important;
+    background: transparent !important;
+  }
+
+  /* Tables: repeat headers, avoid row splits */
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    font-size: 9pt;
+  }
+
+  thead {
+    display: table-header-group;
+  }
+
+  tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  th {
+    background: #f1f5f9 !important;
+    font-weight: 600;
+    padding: 0.35rem 0.5rem !important;
+  }
+
+  td {
+    padding: 0.3rem 0.5rem !important;
+    vertical-align: top;
+  }
+
+  /* Charts / Recharts don't print reliably */
+  .recharts-wrapper,
+  .recharts-surface {
+    display: none !important;
+  }
+
+  a[href]::after {
+    content: none !important;
+  }
+
+  /* Toasts and fixed UI */
+  [data-rht-toaster],
+  iframe {
+    display: none !important;
+  }
+
+  /* Sticky columns break print layout */
+  .sticky {
+    position: static !important;
+  }
+
+  /* Show all dashboard tab panels in the print stack */
+  .dashboard-print-section {
+    display: block !important;
+  }
+
+  .evaluation-print-section,
+  .evaluation-dashboard {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  .evaluation-dashboard .card-surface {
+    border: 1px solid #cbd5e1 !important;
+    box-shadow: none !important;
+    background: #ffffff !important;
+  }
+
+  .evaluation-section-title {
+    color: #000000 !important;
+  }
+
+  .evaluation-glow {
+    box-shadow: none !important;
+  }
+}
+
+.evaluation-section-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.evaluation-section-divider {
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border-default);
+}
+
+.evaluation-glow {
+  box-shadow: 0 0 16px rgba(16, 185, 129, 0.35);
 }

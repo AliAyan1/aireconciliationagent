@@ -52,13 +52,14 @@ export async function GET(
     return NextResponse.json({
       session: {
         id: payload.session.id,
-        createdAt: payload.session.createdAt,
         status: payload.session.status,
         bankFileName: payload.session.bankFileName,
         ledgerFileName: payload.session.ledgerFileName,
         aiScoringUsed: payload.session.aiScoringUsed,
         aiPairsScored: payload.session.aiPairsScored,
         aiProcessingTimeMs: payload.session.aiProcessingTimeMs,
+        rulesProcessingTimeMs: payload.session.rulesProcessingTimeMs,
+        createdAt: payload.session.createdAt.toISOString(),
       },
       results: payload.results,
       summary: payload.summary,

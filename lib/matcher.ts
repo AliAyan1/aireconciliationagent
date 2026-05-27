@@ -1,11 +1,13 @@
+import {
+  DEFAULT_MATCHING_CONFIG,
+  type MatchingConfig,
+} from "./matching-config";
 import type {
   BankTransaction,
   LedgerEntry,
   MatchResult,
   ReconciliationSummary,
 } from "./types";
-
-const AMOUNT_TOLERANCE = 500;
 
 export function daysDifference(date1: string, date2: string): number {
   const d1 = new Date(date1).getTime();
@@ -39,8 +41,13 @@ function createMatch(
 
 export function runMatching(
   bankTxns: BankTransaction[],
-  ledgerEntries: LedgerEntry[]
+  ledgerEntries: LedgerEntry[],
+  config: MatchingConfig = DEFAULT_MATCHING_CONFIG
 ): MatchResult[] {
+  const amountTolerance = config.amountTolerancePkr;
+  const dateTolerance = config.dateToleranceDays;
+  const autoThreshold = config.autoApproveThreshold;
+  const phase = config.phaseThresholds;
   const results: MatchResult[] = [];
   const matchedBank = new Set<string>();
   const matchedLedger = new Set<string>();
@@ -85,7 +92,7 @@ export function runMatching(
       if (bank.amount !== ledger.amount) continue;
 
       const daysDiff = daysDifference(bank.date, ledger.date);
-      if (daysDiff > 2 || daysDiff === 0) continue;
+      if (daysDiff > dateTolerance || daysDiff === 0) continue;
 
       const confidence = 95 - daysDiff * 5;
       if (confidence > bestConfidence) {
@@ -98,7 +105,10 @@ export function runMatching(
     if (bestLedger) {
       matchedBank.add(bank.id);
       matchedLedger.add(bestLedger.id);
-      const status = bestConfidence >= 90 ? "auto_matched" : "review";
+      const status =
+        bestConfidence >= Math.min(phase.near, autoThreshold)
+          ? "auto_matched"
+          : "review";
       results.push(
         createMatch(
           bank,
@@ -126,10 +136,10 @@ export function runMatching(
       if (bank.type !== ledger.type) continue;
 
       const amountDiff = Math.abs(bank.amount - ledger.amount);
-      if (amountDiff > AMOUNT_TOLERANCE) continue;
+      if (amountDiff > amountTolerance) continue;
 
       const daysDiff = daysDifference(bank.date, ledger.date);
-      if (daysDiff > 3) continue;
+      if (daysDiff > dateTolerance + 1) continue;
 
       const confidence = clamp(
         85 - amountDiff / 100 - daysDiff * 3,
@@ -148,12 +158,14 @@ export function runMatching(
     if (bestLedger) {
       matchedBank.add(bank.id);
       matchedLedger.add(bestLedger.id);
+      const fuzzyStatus =
+        bestConfidence >= phase.fuzzy ? "auto_matched" : "review";
       results.push(
         createMatch(
           bank,
           bestLedger,
           bestConfidence,
-          "review",
+          fuzzyStatus,
           "fuzzy",
           `Amount diff PKR ${Math.round(bestAmountDiff)}, date offset ${bestDays} day(s)`
         )
@@ -228,8 +240,6 @@ export function getSummary(
 
 // ─── Phase 5: AI scoring candidates ─────────────────────────────────
 
-const AI_AMOUNT_TOLERANCE = 2000;
-const AI_DATE_TOLERANCE_DAYS = 5;
 const MAX_AI_CANDIDATES = 30;
 
 export interface AIScoringCandidate {
@@ -261,8 +271,14 @@ function parseCrossMatchCandidateId(
 }
 
 export function getAIScoringCandidates(
-  results: MatchResult[]
+  results: MatchResult[],
+  config: MatchingConfig = DEFAULT_MATCHING_CONFIG
 ): AIScoringCandidate[] {
+  const aiAmountTolerance = Math.max(
+    config.amountTolerancePkr * 4,
+    2000
+  );
+  const aiDateTolerance = Math.max(config.dateToleranceDays, 5);
   const candidates: CandidateWithSort[] = [];
 
   for (const r of results) {
@@ -303,10 +319,10 @@ export function getAIScoringCandidates(
       if (bank.type !== ledger.type) continue;
 
       const amountDiff = Math.abs(bank.amount - ledger.amount);
-      if (amountDiff > AI_AMOUNT_TOLERANCE) continue;
+      if (amountDiff > aiAmountTolerance) continue;
 
       const days = daysDifference(bank.date, ledger.date);
-      if (days > AI_DATE_TOLERANCE_DAYS) continue;
+      if (days > aiDateTolerance) continue;
 
       if (amountDiff < bestAmountDiff) {
         bestAmountDiff = amountDiff;
@@ -340,8 +356,11 @@ export function getAIScoringCandidates(
   }));
 }
 
-function statusFromAIConfidence(confidence: number): MatchResult["status"] {
-  if (confidence >= 90) return "auto_matched";
+function statusFromAIConfidence(
+  confidence: number,
+  config: MatchingConfig = DEFAULT_MATCHING_CONFIG
+): MatchResult["status"] {
+  if (confidence >= config.phaseThresholds.ai) return "auto_matched";
   if (confidence >= 70) return "review";
   return "unmatched";
 }
@@ -349,7 +368,11 @@ function statusFromAIConfidence(confidence: number): MatchResult["status"] {
 /** When AI rejects a pair (<70), split linked rows so Unmatched UI lists them correctly. */
 function splitRejectedPair(
   match: MatchResult,
-  score: { confidence: number; reasoning: string },
+  score: {
+    confidence: number;
+    reasoning: string;
+    matchFactors?: NonNullable<MatchResult["aiMetadata"]>["matchFactors"];
+  },
   scoredAt: string
 ): MatchResult[] {
   const bank = match.bankTransaction;
@@ -358,6 +381,7 @@ function splitRejectedPair(
     aiScored: true,
     aiConfidence: score.confidence,
     aiReasoning: score.reasoning,
+    matchFactors: score.matchFactors ?? null,
     scoredAt,
   };
   if (!bank || !ledger) {
@@ -381,10 +405,15 @@ function splitRejectedPair(
 
 function applyScoreToMatch(
   match: MatchResult,
-  score: { confidence: number; reasoning: string },
-  scoredAt: string
+  score: {
+    confidence: number;
+    reasoning: string;
+    matchFactors?: NonNullable<MatchResult["aiMetadata"]>["matchFactors"];
+  },
+  scoredAt: string,
+  config: MatchingConfig = DEFAULT_MATCHING_CONFIG
 ): MatchResult | MatchResult[] {
-  const status = statusFromAIConfidence(score.confidence);
+  const status = statusFromAIConfidence(score.confidence, config);
   if (status === "unmatched" && match.bankTransaction && match.ledgerEntry) {
     return splitRejectedPair(match, score, scoredAt);
   }
@@ -398,6 +427,7 @@ function applyScoreToMatch(
       aiScored: true,
       aiConfidence: score.confidence,
       aiReasoning: score.reasoning,
+      matchFactors: score.matchFactors ?? null,
       scoredAt,
     },
   };
@@ -405,7 +435,13 @@ function applyScoreToMatch(
 
 export function applyAIScores(
   results: MatchResult[],
-  aiScores: Array<{ id: string; confidence: number; reasoning: string }>
+  aiScores: Array<{
+    id: string;
+    confidence: number;
+    reasoning: string;
+    matchFactors?: NonNullable<MatchResult["aiMetadata"]>["matchFactors"];
+  }>,
+  config: MatchingConfig = DEFAULT_MATCHING_CONFIG
 ): MatchResult[] {
   if (aiScores.length === 0) return results;
 
@@ -437,13 +473,14 @@ export function applyAIScores(
       bankTransaction: bank,
       ledgerEntry: ledger,
       confidence: score.confidence,
-      status: statusFromAIConfidence(score.confidence),
+      status: statusFromAIConfidence(score.confidence, config),
       matchType: "ai_scored",
       matchReason: `AI: ${score.reasoning}`,
       aiMetadata: {
         aiScored: true,
         aiConfidence: score.confidence,
         aiReasoning: score.reasoning,
+        matchFactors: score.matchFactors ?? null,
         scoredAt,
       },
     });
@@ -462,7 +499,7 @@ export function applyAIScores(
   const updated = filtered.flatMap((r) => {
     const score = scoreMap.get(r.id);
     if (!score) return [r];
-    const applied = applyScoreToMatch(r, score, scoredAt);
+    const applied = applyScoreToMatch(r, score, scoredAt, config);
     return Array.isArray(applied) ? applied : [applied];
   });
 
