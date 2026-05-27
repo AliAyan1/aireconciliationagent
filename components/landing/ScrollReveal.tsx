@@ -8,6 +8,15 @@ interface ScrollRevealProps {
   stagger?: boolean;
 }
 
+function revealElement(target: Element) {
+  target.classList.add("scroll-reveal-visible");
+}
+
+function isInViewport(target: Element) {
+  const rect = target.getBoundingClientRect();
+  return rect.top < window.innerHeight && rect.bottom > 0;
+}
+
 export function ScrollReveal({ children, className = "", stagger = false }: ScrollRevealProps) {
   const ref = useRef<HTMLDivElement>(null);
 
@@ -15,24 +24,31 @@ export function ScrollReveal({ children, className = "", stagger = false }: Scro
     const el = ref.current;
     if (!el) return;
 
+    const targets: Element[] = stagger
+      ? Array.from(el.querySelectorAll(".scroll-reveal-item"))
+      : [el];
+
+    if (typeof IntersectionObserver === "undefined") {
+      targets.forEach(revealElement);
+      return;
+    }
+
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
           if (entry.isIntersecting) {
-            entry.target.classList.add("scroll-reveal-visible");
+            revealElement(entry.target);
             observer.unobserve(entry.target);
           }
         });
       },
-      { threshold: 0.12, rootMargin: "0px 0px -40px 0px" }
+      { threshold: 0.08, rootMargin: "0px 0px 5% 0px" }
     );
 
-    if (stagger) {
-      const items = el.querySelectorAll(".scroll-reveal-item");
-      items.forEach((item) => observer.observe(item));
-    } else {
-      observer.observe(el);
-    }
+    targets.forEach((target) => {
+      if (isInViewport(target)) revealElement(target);
+      observer.observe(target);
+    });
 
     return () => observer.disconnect();
   }, [stagger]);

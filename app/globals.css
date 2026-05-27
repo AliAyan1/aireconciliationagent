@@ -483,11 +483,11 @@ body {
     transform 0.55s ease-out;
 }
 .scroll-reveal.scroll-reveal-visible:not(.scroll-reveal-stagger),
-.scroll-reveal-visible.scroll-reveal-item {
+.scroll-reveal-stagger .scroll-reveal-item.scroll-reveal-visible {
   opacity: 1;
   transform: translateY(0);
 }
-.scroll-reveal-stagger .scroll-reveal-item {
+.scroll-reveal-stagger .scroll-reveal-item:not(.scroll-reveal-visible) {
   opacity: 0;
   transform: translateY(20px);
   transition:
