@@ -1,8 +1,7 @@
-import { ImageResponse } from "next/og";
-import { APP_NAME, APP_TAGLINE } from "@/lib/branding";
+import { ImageResponse } from "@vercel/og";
 import { OG_COLORS } from "@/lib/og-branding";
 
-export const alt = `${APP_NAME} — ${APP_TAGLINE}`;
+export const alt = "Hisab.ai — AI Reconciliation";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -44,7 +43,7 @@ export default function OpenGraphImage() {
               color: OG_COLORS.accent,
             }}
           >
-            H.
+            H
           </div>
           <span
             style={{
@@ -54,7 +53,7 @@ export default function OpenGraphImage() {
               letterSpacing: "-0.03em",
             }}
           >
-            <span style={{ color: OG_COLORS.accent }}>Hisaab</span>
+            <span style={{ color: OG_COLORS.accent }}>Hisab</span>
             <span style={{ color: OG_COLORS.text }}>.ai</span>
           </span>
         </div>
@@ -67,7 +66,7 @@ export default function OpenGraphImage() {
             margin: 0,
           }}
         >
-          {APP_TAGLINE}
+          Reconcile transactions in seconds, not hours.
         </p>
         <div
           style={{
@@ -76,13 +75,14 @@ export default function OpenGraphImage() {
             marginTop: 48,
             fontSize: 22,
             color: OG_COLORS.accent,
+            flexWrap: "wrap",
           }}
         >
-          <span>Bank ↔ Ledger matching</span>
+          <span>4–6 hrs → 30 sec</span>
           <span>·</span>
-          <span>AI confidence scores</span>
+          <span>97%+ accuracy</span>
           <span>·</span>
-          <span>Audit-ready exports</span>
+          <span>Audit trail included</span>
         </div>
       </div>
     ),

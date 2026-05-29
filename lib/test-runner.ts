@@ -272,7 +272,6 @@ export function runTestSuite(
     };
   }
 
-  const matchStart = Date.now();
   const results = runMatching(bankTxns, ledgerEntries);
   const processingTimeMs = Date.now() - start;
 

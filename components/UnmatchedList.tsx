@@ -144,7 +144,7 @@ export function UnmatchedList({
     return () => {
       cancelled = true;
     };
-  }, [results]);
+  }, [unmatched]);
 
   if (unmatched.length === 0) {
     return (

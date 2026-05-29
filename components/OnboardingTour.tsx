@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { AUDIT_CERTIFICATE_SIGNER } from "@/lib/audit-certificate";
 import {
@@ -57,7 +57,9 @@ interface OnboardingTourProps {
 }
 
 export function OnboardingTour({ page, onStepChange }: OnboardingTourProps) {
-  const [step, setStep] = useState<OnboardingStepIndex | null>(null);
+  const [step, setStep] = useState<OnboardingStepIndex | null>(() =>
+    getActiveStepForPage(page)
+  );
   const [rect, setRect] = useState<{
     top: number;
     left: number;
@@ -65,19 +67,17 @@ export function OnboardingTour({ page, onStepChange }: OnboardingTourProps) {
     height: number;
     bottom: number;
   } | null>(null);
-  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    setMounted(true);
     const active = getActiveStepForPage(page);
-    setStep(active);
     if (active) onStepChange?.(active);
   }, [page, onStepChange]);
 
+  const stepConfig = useMemo(() => (step ? STEPS[step] : null), [step]);
+
   const measureTarget = useCallback(() => {
-    if (!step) return;
-    const config = STEPS[step];
-    const el = document.querySelector(config.target);
+    if (!stepConfig) return;
+    const el = document.querySelector(stepConfig.target);
     if (!el) {
       setRect(null);
       return;
@@ -91,24 +91,20 @@ export function OnboardingTour({ page, onStepChange }: OnboardingTourProps) {
       height: r.height + pad * 2,
       bottom: r.bottom + pad,
     });
-  }, [step]);
+  }, [stepConfig]);
 
   useEffect(() => {
     if (!step) return;
-    measureTarget();
-    const t = window.setTimeout(measureTarget, 150);
-    const t2 = window.setTimeout(measureTarget, 400);
+    // Only subscribe; updates happen via browser events.
     window.addEventListener("resize", measureTarget);
     window.addEventListener("scroll", measureTarget, true);
     return () => {
-      window.clearTimeout(t);
-      window.clearTimeout(t2);
       window.removeEventListener("resize", measureTarget);
       window.removeEventListener("scroll", measureTarget, true);
     };
   }, [step, measureTarget]);
 
-  if (!mounted || !step || STEPS[step].page !== page) return null;
+  if (!step || STEPS[step].page !== page) return null;
 
   const activeStep = step;
   const config = STEPS[activeStep];

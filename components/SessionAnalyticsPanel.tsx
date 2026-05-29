@@ -79,8 +79,8 @@ export function SessionAnalyticsPanel({ results }: SessionAnalyticsPanelProps) {
           </p>
           <ul className="mt-3 space-y-1.5 text-xs text-muted max-h-32 overflow-y-auto">
             {mismatch.rows.slice(0, 5).map((r) => (
-              <li key={r.id} className="flex justify-between gap-2 tabular-nums">
-                <span className="truncate">{r.description}</span>
+              <li key={r.id} className="flex justify-between gap-2 font-mono tabular-nums">
+                <span className="truncate font-sans">{r.description}</span>
                 <span className="text-[var(--warning)] shrink-0">
                   {formatPKR(r.difference)}
                 </span>

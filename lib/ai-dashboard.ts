@@ -338,9 +338,6 @@ export async function reviewChat(
   if (!isOpenAIConfigured()) {
     return "Add OPENAI_API_KEY to enable conversational review.";
   }
-  const bank = match.bankTransaction;
-  const ledger = match.ledgerEntry;
-
   const system = `You help a reviewer decide on a bank vs ledger match. Answer briefly in 1-3 sentences.
 User may ask about duplicates, risk, dates, amounts, or entity names. Pakistani business context.`;
 

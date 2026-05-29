@@ -23,18 +23,31 @@ interface DashboardWidgetsProps {
   animate?: boolean;
 }
 
+const STAT_TOOLTIPS: Record<string, string> = {
+  "Total Transactions": "Total number of bank transactions uploaded",
+  "Auto Matched": "Transactions matched automatically with >90% confidence",
+  "Needs Review": "Uncertain matches waiting for human approval",
+  Posted: "Approved matches recorded in the journal",
+  Unmatched: "Transactions with no match on the other side",
+};
+
 function WidgetValue({
   value,
   animate,
   className,
+  title,
 }: {
   value: number;
   animate: boolean;
   className: string;
+  title?: string;
 }) {
   const display = useAnimatedNumber(value, 1000, animate);
   return (
-    <p className={`text-2xl sm:text-[28px] font-bold tabular-nums leading-none ${className}`}>
+    <p
+      className={`text-2xl sm:text-[28px] font-bold tabular-nums leading-none ${className}`}
+      title={title}
+    >
       {display}
     </p>
   );
@@ -203,6 +216,7 @@ export function DashboardWidgets({
                 value={meta.getValue(summary, aiScoredCount)}
                 animate={animate && meta.animate}
                 className={meta.valueColor}
+                title={STAT_TOOLTIPS[meta.label]}
               />
               {results.length > 0 && SPARKLINE_WIDGETS[id as WidgetId] && (
                 <Sparkline
@@ -214,10 +228,10 @@ export function DashboardWidgets({
                 />
               )}
             </div>
-            <p className="mt-2 text-[10px] sm:text-xs font-semibold uppercase tracking-wide text-secondary">
+            <p className="mt-2 text-sm font-semibold uppercase tracking-wide text-secondary">
               {meta.label}
             </p>
-            <p className="mt-1 text-[10px] sm:text-xs text-muted">
+            <p className="mt-1 text-sm text-muted">
               {meta.subtitle(summary)}
             </p>
           </div>

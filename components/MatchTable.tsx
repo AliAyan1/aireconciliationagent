@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useMemo, useRef, useState } from "react";
 import type { JournalPost, MatchResult } from "@/lib/types";
 import { formatDate, formatPKR } from "@/lib/format";
 import { isMatchAIScored } from "@/lib/ai-display";
@@ -95,10 +95,10 @@ export function MatchTable({
     new Set<QuickFilterKey>(["all"])
   );
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [columnWidths, setColumnWidths] = useState(DEFAULT_COLUMN_WIDTHS);
-  const [sort, setSort] = useState<MatchTableSort | null>(null);
+  const [columnWidths, setColumnWidths] = useState(() => loadColumnWidths());
+  const [sort, setSort] = useState<MatchTableSort | null>(() => loadTableSort());
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSizeState] = useState(50);
+  const [pageSize, setPageSizeState] = useState(() => loadPageSize());
   const resizeRef = useRef<{
     col: string;
     startX: number;
@@ -108,12 +108,8 @@ export function MatchTable({
   const expandedId =
     controlledExpanded !== undefined ? controlledExpanded : localExpanded;
   const setExpandedId = onExpandedChange ?? setLocalExpanded;
-
-  useEffect(() => {
-    setColumnWidths(loadColumnWidths());
-    setSort(loadTableSort());
-    setPageSizeState(loadPageSize());
-  }, [tableResetKey]);
+  // Parent should bump tableResetKey to force a remount when needed.
+  void tableResetKey;
 
   const todayStr = useMemo(() => new Date().toISOString().slice(0, 10), []);
 
@@ -150,15 +146,15 @@ export function MatchTable({
   }, [results, localQuery, hideSearch, sort, activeFilters, todayStr]);
 
   const total = filtered.length;
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  // Keep rendering bounded for very large datasets.
+  const effectivePageSize = total > 100 ? Math.min(pageSize, 50) : pageSize;
+  const totalPages = Math.max(1, Math.ceil(total / effectivePageSize));
   const safePage = Math.min(page, totalPages);
-  const pageStart = (safePage - 1) * pageSize;
-  const pageEnd = Math.min(pageStart + pageSize, total);
+  const pageStart = (safePage - 1) * effectivePageSize;
+  const pageEnd = Math.min(pageStart + effectivePageSize, total);
   const paged = filtered.slice(pageStart, pageEnd);
 
-  useEffect(() => {
-    if (page > totalPages) setPage(totalPages);
-  }, [page, totalPages]);
+  // Avoid syncing state in an effect; `safePage` clamps UI rendering.
 
   const allPageSelected =
     paged.length > 0 && paged.every((r) => selected.has(r.id));
@@ -309,7 +305,7 @@ export function MatchTable({
       />
 
       <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted">
-        {total > pageSize ? (
+        {total > effectivePageSize ? (
           <p>
             Showing {pageStart + 1}–{pageEnd} of {total} transactions
           </p>
@@ -320,9 +316,15 @@ export function MatchTable({
           <label className="flex items-center gap-1.5 text-xs">
             Per page
             <select
-              value={pageSize}
+              value={effectivePageSize}
               onChange={(e) => changePageSize(Number(e.target.value))}
               className="input-field px-2 py-1 text-xs"
+              disabled={total > 100}
+              title={
+                total > 100
+                  ? "Large dataset: rendering is limited to 50 rows per page for performance."
+                  : undefined
+              }
             >
               <option value={25}>25</option>
               <option value={50}>50</option>
@@ -529,7 +531,15 @@ export function MatchTable({
                             {r.bankTransaction && (
                               <p className="mt-1 text-xs text-secondary">
                                 {formatDate(r.bankTransaction.date)} ·{" "}
-                                {formatPKR(r.bankTransaction.amount)}
+                                <span
+                                  className={`font-mono tabular-nums ${
+                                    r.bankTransaction.amount < 0
+                                      ? "text-[var(--danger)]"
+                                      : "text-primary"
+                                  }`}
+                                >
+                                  {formatPKR(r.bankTransaction.amount)}
+                                </span>
                               </p>
                             )}
                             {renderObjectDetails(
@@ -546,7 +556,15 @@ export function MatchTable({
                             {r.ledgerEntry && (
                               <p className="mt-1 text-xs text-secondary">
                                 {formatDate(r.ledgerEntry.date)} ·{" "}
-                                {formatPKR(r.ledgerEntry.amount)}
+                                <span
+                                  className={`font-mono tabular-nums ${
+                                    r.ledgerEntry.amount < 0
+                                      ? "text-[var(--danger)]"
+                                      : "text-primary"
+                                  }`}
+                                >
+                                  {formatPKR(r.ledgerEntry.amount)}
+                                </span>
                               </p>
                             )}
                             {renderObjectDetails(
@@ -616,7 +634,13 @@ export function MatchTable({
                                       {" · "}
                                       <span className="text-primary">{j.narration}</span>
                                       {" · "}
-                                      <span className="tabular-nums">
+                                      <span
+                                        className={`font-mono tabular-nums ${
+                                          j.amount < 0
+                                            ? "text-[var(--danger)]"
+                                            : "text-primary"
+                                        }`}
+                                      >
                                         {formatPKR(j.amount)}
                                       </span>
                                     </li>

@@ -1,7 +1,7 @@
 const stats = [
-  { value: "90%", label: "Time saved", sub: "vs manual Excel" },
-  { value: "<30", label: "Minutes", sub: "per reconciliation cycle" },
-  { value: "97%+", label: "Match rate", sub: "with review workflow" },
+  { value: "< 30s", label: "Processing time", sub: "typical run on CSVs" },
+  { value: "90–97%", label: "Match rate", sub: "with review workflow" },
+  { value: "> 90%", label: "Auto-match confidence", sub: "no review needed" },
   { value: "100%", label: "Audit trail", sub: "every decision logged" },
 ];
 

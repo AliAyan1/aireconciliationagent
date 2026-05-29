@@ -105,7 +105,11 @@ export function DragToMatchUnmatched({
                       <span className="flex-1 text-sm text-primary min-w-[10rem]">
                         {txn.description}
                       </span>
-                      <span className="font-medium text-primary text-sm">
+                      <span
+                        className={`font-mono tabular-nums font-medium text-sm ${
+                          txn.amount < 0 ? "text-[var(--danger)]" : "text-primary"
+                        }`}
+                      >
                         {formatPKR(txn.amount)}
                       </span>
                       <span className="text-xs text-muted">
@@ -180,7 +184,11 @@ export function DragToMatchUnmatched({
                       <span className="flex-1 text-sm text-primary min-w-[10rem]">
                         {txn.description}
                       </span>
-                      <span className="font-medium text-primary text-sm">
+                      <span
+                        className={`font-mono tabular-nums font-medium text-sm ${
+                          txn.amount < 0 ? "text-[var(--danger)]" : "text-primary"
+                        }`}
+                      >
                         {formatPKR(txn.amount)}
                       </span>
                       <span className="text-xs text-muted">

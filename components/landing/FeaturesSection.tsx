@@ -54,8 +54,8 @@ export function FeaturesSection() {
           Everything finance teams need
         </h2>
         <p className="mx-auto mt-4 max-w-2xl text-slate-400">
-          Rule-based matching today. OpenAI fuzzy scoring for description
-          similarity — coming in the next sprint.
+          Rule-based matching plus optional AI scoring for fuzzy description similarity, with a
+          review workflow and an audit trail.
         </p>
       </div>
 

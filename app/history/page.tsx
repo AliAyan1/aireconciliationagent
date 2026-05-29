@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { SiteHeader } from "@/components/SiteHeader";
+import { applyClientMeta } from "@/lib/client-meta";
 
 interface SessionListItem {
   id: string;
@@ -23,6 +24,10 @@ export default function HistoryPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    applyClientMeta({
+      title: "History — Hisab.ai",
+      description: "Browse past reconciliation sessions and reopen runs.",
+    });
     fetch("/api/sessions")
       .then(async (res) => {
         if (!res.ok) {

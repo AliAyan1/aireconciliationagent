@@ -13,6 +13,13 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
   ]),
+  {
+    rules: {
+      // This rule is overly strict for our app; we use effects
+      // for async fetches and client-only hydration behaviors.
+      "react-hooks/set-state-in-effect": "off",
+    },
+  },
 ]);
 
 export default eslintConfig;

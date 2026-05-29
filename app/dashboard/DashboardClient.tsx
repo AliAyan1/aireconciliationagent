@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import { AchievementBadges } from "@/components/AchievementBadges";
@@ -23,10 +24,6 @@ import { MissingEntriesPanel } from "@/components/MissingEntriesPanel";
 import { PostEntriesPanel } from "@/components/PostEntriesPanel";
 import { ReviewQueue } from "@/components/ReviewQueue";
 import { SessionAnalyticsPanel } from "@/components/SessionAnalyticsPanel";
-import {
-  EvaluationDashboard,
-  EvaluationSkeleton,
-} from "@/components/EvaluationDashboard";
 import type { EvaluationResult } from "@/lib/evaluator";
 import { ShortcutsHelp } from "@/components/ShortcutsHelp";
 import { SiteHeader } from "@/components/SiteHeader";
@@ -58,12 +55,10 @@ import { logActivity } from "@/lib/activity-log";
 import { useReviewUndo } from "@/hooks/useReviewUndo";
 import { saveReviewDecision } from "@/lib/review-feedback";
 import { usePerfectMatchConfetti } from "@/hooks/usePerfectMatchConfetti";
-import { isPerfectMatch } from "@/lib/perfect-match-confetti";
 import {
   computeReviewProgress,
   loadReviewProgress,
   saveReviewProgress,
-  type ReviewProgressState,
 } from "@/lib/review-progress";
 import { filterAIResults, isMatchAIScored } from "@/lib/ai-display";
 import { downloadCsvReport } from "@/lib/client-export";
@@ -73,6 +68,8 @@ import type { ReconciliationSummary } from "@/lib/types";
 import { filterResultsByQuery } from "@/lib/search-matches";
 import { APP_NAME, APP_REPORT_TITLE } from "@/lib/branding";
 import { playApproveDing, playPostWhoosh } from "@/lib/ui-sounds";
+import { useDebounce } from "@/hooks/useDebounce";
+import { fetchWithTimeout, friendlyNetworkMessage } from "@/lib/fetch-with-timeout";
 import {
   loadSession,
   loadSessionId,
@@ -84,6 +81,20 @@ import type { OnboardingStepIndex } from "@/lib/onboarding";
 import type { MatchResult, MissingEntryProposal } from "@/lib/types";
 
 type Tab = DashboardTab;
+
+const EvaluationDashboard = dynamic(
+  () =>
+    import("@/components/EvaluationDashboard").then((m) => m.EvaluationDashboard),
+  {
+    loading: () => <div className="glass-card p-4">Loading evaluation…</div>,
+    ssr: false,
+  }
+);
+const EvaluationSkeleton = dynamic(
+  () =>
+    import("@/components/EvaluationDashboard").then((m) => m.EvaluationSkeleton),
+  { loading: () => null, ssr: false }
+);
 
 export interface DashboardClientProps {
   sessionParam: string | null;
@@ -105,8 +116,8 @@ export function DashboardClient({ sessionParam }: DashboardClientProps) {
   const [copied, setCopied] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [focusedReviewId, setFocusedReviewId] = useState<string | null>(null);
-  const [restoredProgress, setRestoredProgress] =
-    useState<ReviewProgressState | null>(null);
+  const [restoredProgressDismissed, setRestoredProgressDismissed] =
+    useState(false);
   const [expandedTableId, setExpandedTableId] = useState<string | null>(null);
   const [anomalyMap, setAnomalyMap] = useState<Record<string, string>>({});
   const [anomaliesLoading, setAnomaliesLoading] = useState(false);
@@ -120,8 +131,18 @@ export function DashboardClient({ sessionParam }: DashboardClientProps) {
   const evalFetchedRef = useRef(false);
 
   const sessionId = session?.sessionId ?? sessionParam ?? loadSessionId();
+  const debouncedSearchQuery = useDebounce(searchQuery, 300);
+
 
   usePerfectMatchConfetti(session?.summary, sessionId, !loading && !!session);
+
+  const restoredProgress = useMemo(() => {
+    if (loading || !session) return null;
+    return loadReviewProgress(sessionId);
+  }, [loading, session, sessionId]);
+
+  const effectiveFocusedReviewId =
+    focusedReviewId ?? restoredProgress?.focusedReviewId ?? null;
 
   const runEvaluation = useCallback(async () => {
     if (!results.length) return;
@@ -133,7 +154,7 @@ export function DashboardClient({ sessionParam }: DashboardClientProps) {
         session?.auditMeta?.aiProcessingTimeMs ??
         session?.aiMeta?.aiProcessingTimeMs ??
         0;
-      const res = await fetch("/api/evaluate", {
+      const res = await fetchWithTimeout("/api/evaluate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -150,9 +171,7 @@ export function DashboardClient({ sessionParam }: DashboardClientProps) {
       const data = (await res.json()) as { evaluation: EvaluationResult };
       setEvaluation(data.evaluation);
     } catch (e) {
-      setEvalError(
-        e instanceof Error ? e.message : "Could not run evaluation"
-      );
+      setEvalError(friendlyNetworkMessage(e));
     } finally {
       setEvalLoading(false);
     }
@@ -242,6 +261,27 @@ export function DashboardClient({ sessionParam }: DashboardClientProps) {
       }
 
       const data = loadSession();
+      // If there's no local session, try to recover the latest saved session from DB (if enabled).
+      if (!data) {
+        try {
+          const res = await fetch("/api/sessions");
+          if (res.ok) {
+            const json = (await res.json()) as {
+              sessions?: Array<{ id: string }>;
+            };
+            const latestId = json.sessions?.[0]?.id;
+            if (latestId) {
+              const ok = await hydrateFromApi(latestId);
+              if (ok) {
+                setLoading(false);
+                return;
+              }
+            }
+          }
+        } catch {
+          // optional recovery path
+        }
+      }
       setSession(data);
       if (data) {
         setResults(data.results);
@@ -251,15 +291,6 @@ export function DashboardClient({ sessionParam }: DashboardClientProps) {
     }
     void load();
   }, [sessionParam, hydrateFromApi]);
-
-  // Restore review focus + banner if the user refreshed mid-review.
-  useEffect(() => {
-    if (loading || !session) return;
-    const saved = loadReviewProgress(sessionId);
-    if (!saved) return;
-    setRestoredProgress(saved);
-    if (saved.focusedReviewId) setFocusedReviewId(saved.focusedReviewId);
-  }, [loading, session, sessionId]);
 
   useEffect(() => {
     if (!loading && session) {
@@ -386,10 +417,11 @@ export function DashboardClient({ sessionParam }: DashboardClientProps) {
 
   async function handleGenerateMissing() {
     if (!session) return;
+    if (isGenerating) return;
     setIsGenerating(true);
     setActionError(null);
     try {
-      const res = await fetch("/api/generate-missing", {
+      const res = await fetchWithTimeout("/api/generate-missing", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -414,7 +446,7 @@ export function DashboardClient({ sessionParam }: DashboardClientProps) {
       );
       setTab("entries");
     } catch (e) {
-      setActionError(e instanceof Error ? e.message : "Generate failed");
+      setActionError(friendlyNetworkMessage(e));
     } finally {
       setIsGenerating(false);
     }
@@ -422,10 +454,11 @@ export function DashboardClient({ sessionParam }: DashboardClientProps) {
 
   async function handlePostEntries(matchIds: string[], proposalIds: string[]) {
     if (!session) return;
+    if (isPosting) return;
     setIsPosting(true);
     setActionError(null);
     try {
-      const res = await fetch("/api/post-entries", {
+      const res = await fetchWithTimeout("/api/post-entries", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -459,24 +492,58 @@ export function DashboardClient({ sessionParam }: DashboardClientProps) {
       );
       if (sessionId) await hydrateFromApi(sessionId);
     } catch (e) {
-      setActionError(e instanceof Error ? e.message : "Post failed");
+      setActionError(friendlyNetworkMessage(e));
     } finally {
       setIsPosting(false);
     }
   }
 
   const filteredResults = useMemo(() => {
-    let base = filterResultsByQuery(results, searchQuery);
+    let base = filterResultsByQuery(results, debouncedSearchQuery);
     if (nlQuery?.matchIds) {
       const ids = new Set(nlQuery.matchIds);
       base = base.filter((r) => ids.has(r.id));
     }
     return base;
-  }, [results, searchQuery, nlQuery]);
-  const searchTrimmed = searchQuery.trim();
+  }, [results, debouncedSearchQuery, nlQuery]);
+  const searchTrimmed = debouncedSearchQuery.trim();
   const searchResultCount = searchTrimmed
     ? filteredResults.length
     : results.length;
+
+  const autoMatched = useMemo(
+    () =>
+      filteredResults.filter(
+        (r) => r.status === "auto_matched" || r.status === "posted"
+      ),
+    [filteredResults]
+  );
+  const reviewItems = useMemo(
+    () =>
+      filteredResults.filter(
+        (r) =>
+          (r.status === "review" ||
+            r.status === "approved" ||
+            r.status === "rejected") &&
+          r.bankTransaction &&
+          r.ledgerEntry
+      ),
+    [filteredResults]
+  );
+  const unmatched = useMemo(
+    () => filteredResults.filter((r) => r.status === "unmatched"),
+    [filteredResults]
+  );
+  const postableResults = useMemo(
+    () =>
+      filteredResults.filter(
+        (r) =>
+          (r.status === "auto_matched" || r.status === "approved") &&
+          r.bankTransaction &&
+          r.ledgerEntry
+      ),
+    [filteredResults]
+  );
 
   const filteredJournalPosts = useMemo(() => {
     const posts = session?.journalPosts ?? [];
@@ -523,7 +590,7 @@ export function DashboardClient({ sessionParam }: DashboardClientProps) {
     setAnomaliesLoading(true);
     void (async () => {
       try {
-        const res = await fetch("/api/ai/anomalies", {
+        const res = await fetchWithTimeout("/api/ai/anomalies", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ results }),
@@ -662,6 +729,7 @@ export function DashboardClient({ sessionParam }: DashboardClientProps) {
     results,
     sessionId,
     handleReviewUpdate,
+    commitReviewDecision,
   ]);
 
   useEffect(() => {
@@ -699,14 +767,27 @@ export function DashboardClient({ sessionParam }: DashboardClientProps) {
         <div className="mx-auto max-w-lg px-4 py-32 text-center md:px-8">
           {sessionExpired ? (
             <>
-              <p className="text-xl font-semibold text-primary">Session expired</p>
+              <p className="text-xl font-semibold text-primary">
+                Your session expired.
+              </p>
               <p className="mt-3 text-sm text-secondary">
                 Your data wasn&apos;t saved to the database. Please re-upload
                 your files.
               </p>
-              <Link href="/upload" className="btn-primary mt-6 inline-block px-6 py-2.5 text-sm">
-                Re-upload files
-              </Link>
+              <div className="mt-6 flex flex-col items-center gap-3">
+                <Link
+                  href="/upload"
+                  className="btn-primary inline-block px-6 py-2.5 text-sm"
+                >
+                  Start new reconciliation
+                </Link>
+                <Link
+                  href="/history"
+                  className="text-accent hover:underline text-sm"
+                >
+                  View history
+                </Link>
+              </div>
             </>
           ) : (
             <>
@@ -722,25 +803,6 @@ export function DashboardClient({ sessionParam }: DashboardClientProps) {
   }
 
   const activeSession = session;
-
-  const autoMatched = filteredResults.filter(
-    (r) => r.status === "auto_matched" || r.status === "posted"
-  );
-  const reviewItems = filteredResults.filter(
-    (r) =>
-      (r.status === "review" ||
-        r.status === "approved" ||
-        r.status === "rejected") &&
-      r.bankTransaction &&
-      r.ledgerEntry
-  );
-  const unmatched = filteredResults.filter((r) => r.status === "unmatched");
-  const postableResults = filteredResults.filter(
-    (r) =>
-      (r.status === "auto_matched" || r.status === "approved") &&
-      r.bankTransaction &&
-      r.ledgerEntry
-  );
 
   const draftProposals = proposals.filter((p) => p.status === "draft").length;
   const journalCount = activeSession.journalPosts?.length ?? 0;
@@ -851,7 +913,7 @@ export function DashboardClient({ sessionParam }: DashboardClientProps) {
         role="TEAM"
         notifications={notifications}
       />
-      {restoredProgress && (
+      {restoredProgress && !restoredProgressDismissed && (
         <div className="mx-auto max-w-6xl px-4 pt-4 md:px-8">
           <div className="glass-card border-l-[3px] border-l-emerald-500/70 p-4 text-sm text-secondary">
             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -862,7 +924,7 @@ export function DashboardClient({ sessionParam }: DashboardClientProps) {
               <button
                 type="button"
                 className="btn-ghost text-xs"
-                onClick={() => setRestoredProgress(null)}
+                onClick={() => setRestoredProgressDismissed(true)}
               >
                 Dismiss
               </button>
@@ -923,6 +985,11 @@ export function DashboardClient({ sessionParam }: DashboardClientProps) {
                 </button>
               </div>
             )}
+            {anomaliesLoading && (
+              <span className="rounded-lg border border-default bg-card px-3 py-1.5 text-xs text-muted">
+                Analyzing…
+              </span>
+            )}
           </div>
           <div className="flex flex-wrap items-center gap-3 text-sm">
             <button
@@ -936,8 +1003,11 @@ export function DashboardClient({ sessionParam }: DashboardClientProps) {
             <Link href="/history" className="text-secondary hover:text-accent transition-colors">
               History
             </Link>
-            <Link href="/upload" className="text-accent hover:text-[var(--accent-hover)] transition-colors">
-              ← New Upload
+            <Link
+              href="/upload"
+              className="text-accent hover:text-[var(--accent-hover)] transition-colors"
+            >
+              ← Back to Upload
             </Link>
             <AutoSaveIndicator />
           </div>
@@ -956,6 +1026,32 @@ export function DashboardClient({ sessionParam }: DashboardClientProps) {
               reconciledAt={activeSession.auditMeta?.reconciledAt}
             />
             <ReportVersionHistory sessionId={sessionId} />
+            <details className="glass-card border border-default px-4 py-3">
+              <summary className="cursor-pointer select-none text-sm font-semibold text-primary">
+                ℹ️ How to read this dashboard
+              </summary>
+              <div className="mt-3 space-y-3 text-sm text-secondary leading-relaxed">
+                <p>
+                  <span className="font-semibold text-primary">Auto Matched</span> — These are
+                  high-confidence matches that don&apos;t need your review. The tool found the same
+                  amount on a similar date with matching descriptions.
+                </p>
+                <p>
+                  <span className="font-semibold text-primary">Needs Review</span> — These might be
+                  matches, but the tool isn&apos;t sure enough to decide for you. Check both sides
+                  and click Approve or Reject.
+                </p>
+                <p>
+                  <span className="font-semibold text-primary">Unmatched</span> — These exist on one
+                  side but not the other. Either someone forgot to record the transaction, or it
+                  hasn&apos;t been processed yet.
+                </p>
+                <p>
+                  <span className="font-semibold text-primary">Posted</span> — Matches you&apos;ve
+                  confirmed. These are logged in the journal for your audit trail.
+                </p>
+              </div>
+            </details>
             <div className="flex flex-wrap items-center justify-end gap-2">
               <DashboardTvMode summary={activeSession.summary} results={results} />
             </div>
@@ -1041,7 +1137,10 @@ export function DashboardClient({ sessionParam }: DashboardClientProps) {
                 tableResetKey={tableResetKey}
               />
             ) : (
-              <p className="text-sm text-secondary">No auto-matched transactions.</p>
+              <p className="text-sm text-secondary">
+                No auto matches found. This might mean your files have very different formats. Try
+                adjusting the matching tolerance in Settings.
+              </p>
             )}
           </section>
         )}
@@ -1058,7 +1157,7 @@ export function DashboardClient({ sessionParam }: DashboardClientProps) {
                 results={reviewItems}
                 onUpdate={handleReviewUpdate}
                 onCommit={commitReviewDecision}
-                focusedId={focusedReviewId}
+                focusedId={effectiveFocusedReviewId}
                 onFocusChange={(id) => {
                   setFocusedReviewId(id);
                   const progress = computeReviewProgress(results);
@@ -1072,7 +1171,9 @@ export function DashboardClient({ sessionParam }: DashboardClientProps) {
                 fraudMap={fraudMap}
               />
             ) : (
-              <p className="text-sm text-secondary">Nothing pending review.</p>
+              <p className="text-sm text-secondary">
+                🎉 Nothing to review! All matches are high-confidence.
+              </p>
             )}
           </section>
         )}
@@ -1082,6 +1183,11 @@ export function DashboardClient({ sessionParam }: DashboardClientProps) {
             <h2 className="mb-4 text-lg font-semibold text-primary">
               Unmatched ({unmatched.length})
             </h2>
+            {unmatched.length === 0 && (
+              <p className="mb-4 text-sm text-secondary">
+                🎉 Perfect reconciliation! Every transaction has a match.
+              </p>
+            )}
             <p className="mb-4 text-xs text-muted">
               Drag a <span className="text-accent font-medium">Bank</span> item onto a{" "}
               <span className="text-[var(--purple)] font-medium">Ledger</span> item to create a manual match.
@@ -1138,6 +1244,11 @@ export function DashboardClient({ sessionParam }: DashboardClientProps) {
               onPostSelected={(ids) => void handlePostEntries(ids, [])}
               isPosting={isPosting}
             />
+            {postableResults.length === 0 && (
+              <p className="text-sm text-secondary">
+                Nothing to post yet. Approve some matches first.
+              </p>
+            )}
             <MissingEntriesPanel
               proposals={proposals}
               onGenerate={() => void handleGenerateMissing()}

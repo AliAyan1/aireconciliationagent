@@ -65,7 +65,11 @@ export function MissingEntriesPanel({
             <p className="mt-3 text-sm text-primary">
               → {desc}
             </p>
-            <p className="mt-1 text-xs text-secondary tabular-nums">
+            <p
+              className={`mt-1 text-xs font-mono tabular-nums ${
+                amount < 0 ? "text-[var(--danger)]" : "text-secondary"
+              }`}
+            >
               {formatPKR(amount)} · {formatDate(date)}
             </p>
             <button

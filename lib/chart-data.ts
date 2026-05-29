@@ -3,7 +3,6 @@ import type {
   BankTransaction,
   LedgerEntry,
   MatchResult,
-  ReconciliationSummary,
 } from "./types";
 
 export const CHART_COLORS = {

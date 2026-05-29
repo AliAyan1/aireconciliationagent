@@ -15,10 +15,11 @@ const CURRENCY_LOCALE: Record<string, string> = {
 export function formatMoney(amount: number): string {
   const { currency } = getDisplayPreferences();
   const locale = CURRENCY_LOCALE[currency] ?? "en-PK";
+  const sign = amount < 0 ? "-" : "";
   const value = Math.abs(amount).toLocaleString(locale, {
     maximumFractionDigits: 2,
   });
-  return `${currency} ${value}`;
+  return `${sign}${currency} ${value}`;
 }
 
 /** @deprecated Use formatMoney — kept for compatibility */

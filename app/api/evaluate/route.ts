@@ -52,7 +52,10 @@ export async function POST(request: Request) {
       }
     }
 
-    return NextResponse.json({ evaluation });
+    return NextResponse.json(
+      { evaluation },
+      { headers: { "Cache-Control": "private, max-age=60" } }
+    );
   } catch (error) {
     return apiServerError(error, "POST /api/evaluate");
   }

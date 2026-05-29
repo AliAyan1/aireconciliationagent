@@ -34,7 +34,14 @@ export function TransactionClusterView({
             >
               <span className="text-sm font-medium text-primary">{c.label}</span>
               <span className="text-xs text-muted">
-                {c.count} items · {formatPKR(c.totalAmount)}
+                {c.count} items ·{" "}
+                <span
+                  className={`font-mono tabular-nums ${
+                    c.totalAmount < 0 ? "text-[var(--danger)]" : "text-muted"
+                  }`}
+                >
+                  {formatPKR(c.totalAmount)}
+                </span>
               </span>
             </button>
             {openId === c.id && (

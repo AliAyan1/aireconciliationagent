@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { applyClientMeta } from "@/lib/client-meta";
 import { ColumnMapperPanel } from "@/components/settings/ColumnMapperPanel";
 import {
   detectColumnMapping,
@@ -36,16 +37,14 @@ import { DataPrivacyBanner } from "@/components/security/DataPrivacyBanner";
 import { FileIntegrityCard } from "@/components/security/FileIntegrityCard";
 import { SanitizationBadge } from "@/components/security/SanitizationBadge";
 import type { BankTransaction, LedgerEntry } from "@/lib/types";
+import {
+  isSupportedUploadFile,
+  readFileAsCsvText,
+  unsupportedFileMessage,
+} from "@/lib/file-upload";
 
 function isCsvFile(file: File): boolean {
-  const name = file.name.toLowerCase();
-  return (
-    name.endsWith(".csv") ||
-    name.endsWith(".txt") ||
-    file.type === "text/csv" ||
-    file.type === "text/plain" ||
-    file.type === "application/vnd.ms-excel"
-  );
+  return isSupportedUploadFile(file);
 }
 
 type BatchPair = {
@@ -77,6 +76,7 @@ type UploadZoneProps = {
   rowCount: number;
   parseError: string | null;
   onFile: (file: File) => Promise<void>;
+  helperText?: string;
 };
 
 function UploadZone({
@@ -86,6 +86,7 @@ function UploadZone({
   rowCount,
   parseError,
   onFile,
+  helperText,
 }: UploadZoneProps) {
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -135,7 +136,7 @@ function UploadZone({
       <input
         ref={inputRef}
         type="file"
-        accept=".csv,.txt,text/csv,text/plain,application/vnd.ms-excel"
+        accept=".csv,.txt,.xlsx,.xls,text/csv,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
         className="sr-only"
         onChange={(e) => {
           const f = e.target.files?.[0];
@@ -147,6 +148,11 @@ function UploadZone({
       <span className="mt-1 text-sm text-slate-500 text-center">
         Drop CSV here or click Browse
       </span>
+      {helperText && (
+        <span className="mt-2 text-sm text-slate-400 text-center max-w-md">
+          {helperText}
+        </span>
+      )}
       <button
         type="button"
         onClick={() => inputRef.current?.click()}
@@ -162,7 +168,10 @@ function UploadZone({
             {rowCount > 0 ? "✓" : "⚠"} {file.name}
           </p>
           {rowCount > 0 && (
-            <p className="text-xs text-slate-500 mt-1">{rowCount} rows parsed</p>
+            <p className="text-xs text-slate-500 mt-1">
+              {(file.size / 1024).toLocaleString(undefined, { maximumFractionDigits: 0 })} KB ·{" "}
+              {rowCount.toLocaleString()} rows parsed
+            </p>
           )}
         </div>
       )}
@@ -186,9 +195,14 @@ export default function UploadPage() {
     null
   );
   const [isProcessing, setIsProcessing] = useState(false);
+  const [processingMessage, setProcessingMessage] = useState(
+    "Preparing files…"
+  );
+  const [processingProgress, setProcessingProgress] = useState(10);
   const [error, setError] = useState<string | null>(null);
   const [bankFileHash, setBankFileHash] = useState("");
   const [ledgerFileHash, setLedgerFileHash] = useState("");
+  const [largeFileNotice, setLargeFileNotice] = useState<string | null>(null);
   const [matchRateEstimate, setMatchRateEstimate] = useState<string | null>(
     null
   );
@@ -213,6 +227,10 @@ export default function UploadPage() {
   >([]);
 
   useEffect(() => {
+    applyClientMeta({
+      title: "Upload — Hisab.ai",
+      description: "Upload bank and ledger files to reconcile transactions.",
+    });
     logActivity("page_view", "Opened upload page");
   }, []);
 
@@ -222,8 +240,15 @@ export default function UploadPage() {
   }, [bankData, ledgerData]);
 
   async function handleBankFile(file: File) {
+    if (file.size > 50 * 1024 * 1024) {
+      setBankError("Files over 50MB are not supported. Please split your data.");
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setLargeFileNotice("Large file detected — parsing may take a moment.");
+    }
     if (!isCsvFile(file)) {
-      setBankError("Please choose a .csv file (not Excel .xlsx).");
+      setBankError(unsupportedFileMessage(file.name));
       return;
     }
     setBankFile(file);
@@ -231,7 +256,7 @@ export default function UploadPage() {
     setBankQuality(null);
     setError(null);
     try {
-      const text = await file.text();
+      const text = await readFileAsCsvText(file);
       setBankCsvText(text);
       const headers = Object.keys(parseCsvTable(text).data[0] ?? {});
       const mapping = detectColumnMapping(headers);
@@ -270,8 +295,15 @@ export default function UploadPage() {
   }
 
   async function handleLedgerFile(file: File) {
+    if (file.size > 50 * 1024 * 1024) {
+      setLedgerError("Files over 50MB are not supported. Please split your data.");
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setLargeFileNotice("Large file detected — parsing may take a moment.");
+    }
     if (!isCsvFile(file)) {
-      setLedgerError("Please choose a .csv file (not Excel .xlsx).");
+      setLedgerError(unsupportedFileMessage(file.name));
       return;
     }
     setLedgerFile(file);
@@ -279,7 +311,7 @@ export default function UploadPage() {
     setLedgerQuality(null);
     setError(null);
     try {
-      const text = await file.text();
+      const text = await readFileAsCsvText(file);
       setLedgerCsvText(text);
       const headers = Object.keys(parseCsvTable(text).data[0] ?? {});
       const mapping = detectColumnMapping(headers);
@@ -349,6 +381,7 @@ export default function UploadPage() {
       );
       setBankFileHash(await hashTextSha256(bankText));
       setLedgerFileHash(await hashTextSha256(ledgerText));
+      setLargeFileNotice(null);
     } catch (e) {
       setError(
         e instanceof Error ? e.message : "Failed to load sample files"
@@ -360,6 +393,8 @@ export default function UploadPage() {
     if (!bankData.length || !ledgerData.length) return;
     setIsProcessing(true);
     setError(null);
+    setProcessingMessage("Preparing data…");
+    setProcessingProgress(20);
 
     try {
       const bankName = bankFile?.name ?? "bank_statement.csv";
@@ -369,6 +404,8 @@ export default function UploadPage() {
       );
       const matchingConfig = profile?.config ?? loadMatchingConfig();
 
+      setProcessingMessage("Running matcher…");
+      setProcessingProgress(55);
       const res = await fetch("/api/match", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -386,6 +423,8 @@ export default function UploadPage() {
         throw new Error(err.error ?? "Matching failed");
       }
 
+      setProcessingMessage("Finalizing session…");
+      setProcessingProgress(88);
       const data = await res.json();
       const reconciledAt = new Date().toISOString();
       saveSession({
@@ -415,7 +454,10 @@ export default function UploadPage() {
               }
             : undefined,
       });
-      router.push("/dashboard");
+      setProcessingProgress(98);
+      router.push(
+        data.sessionId ? `/dashboard?session=${data.sessionId}` : "/dashboard"
+      );
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong");
     } finally {
@@ -428,7 +470,7 @@ export default function UploadPage() {
     const csvs = files.filter(isCsvFile);
     if (csvs.length < 2) {
       setBatchPairs([]);
-      setBatchError("Please select at least 2 CSV files.");
+      setBatchError("Please select at least 2 files (.csv, .xlsx, or .xls).");
       return;
     }
 
@@ -548,12 +590,11 @@ export default function UploadPage() {
     ledgerQuality?.canProceed !== false;
 
   useEffect(() => {
-    if (!ready) {
-      setMatchRateEstimate(null);
-      return;
-    }
+    if (!ready) return;
     let cancelled = false;
-    setMatchRateLoading(true);
+    queueMicrotask(() => {
+      if (!cancelled) setMatchRateLoading(true);
+    });
     const bankSample = bankData.slice(0, 10).map((r) => ({
       description: r.description,
       amount: r.amount,
@@ -617,14 +658,19 @@ export default function UploadPage() {
     <div className="min-h-screen bg-primary text-primary">
       {isProcessing && (
         <ProcessingOverlay
-          message="Running HisaabAI matching…"
+          message={processingMessage}
           bankCount={bankData.length}
           ledgerCount={ledgerData.length}
-          progress={65}
+          progress={processingProgress}
         />
       )}
       <SiteHeader active="upload" role="TEAM" />
       <main className="mx-auto max-w-4xl px-6 py-12">
+        <div className="mb-6">
+          <Link href="/" className="text-accent hover:underline text-sm">
+            ← Back to Home
+          </Link>
+        </div>
         <div className="text-center mb-10">
           <h1 className="text-3xl font-bold tracking-tight">Upload CSVs</h1>
           <p className="mt-2 text-slate-400">
@@ -633,6 +679,11 @@ export default function UploadPage() {
         </div>
 
         <DataPrivacyBanner />
+        {largeFileNotice && (
+          <div className="mt-4 rounded-lg border border-default bg-card px-4 py-2 text-sm text-secondary">
+            {largeFileNotice}
+          </div>
+        )}
 
         <section className="glass-card p-5 mb-6">
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -650,7 +701,7 @@ export default function UploadPage() {
               <input
                 type="file"
                 multiple
-                accept=".csv,.txt,text/csv,text/plain,application/vnd.ms-excel"
+                accept=".csv,.txt,.xlsx,.xls,text/csv,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
                 className="sr-only"
                 onChange={(e) => {
                   const files = Array.from(e.target.files ?? []);
@@ -731,6 +782,7 @@ export default function UploadPage() {
               rowCount={bankData.length}
               parseError={bankError}
               onFile={handleBankFile}
+              helperText="Your bank's monthly CSV/Excel export. Usually has columns: Date, Description, Debit, Credit, Balance"
             />
             <UploadQualityReport
               title="Bank data quality"
@@ -773,6 +825,7 @@ export default function UploadPage() {
               rowCount={ledgerData.length}
               parseError={ledgerError}
               onFile={handleLedgerFile}
+              helperText="Your internal accounting records. Usually has: Date, Description, Amount, Type, Reference"
             />
             <UploadQualityReport
               title="Ledger data quality"

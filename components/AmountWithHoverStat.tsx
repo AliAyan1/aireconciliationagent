@@ -35,10 +35,13 @@ export function AmountWithHoverStat({
       : [];
 
   const label = children ?? formatPKR(amount);
+  const tone = amount < 0 ? "text-[var(--danger)]" : "text-primary";
 
   if (lines.length === 0) {
     return (
-      <span className={`tabular-nums ${className}`.trim()}>{label}</span>
+      <span className={`font-mono tabular-nums ${tone} ${className}`.trim()}>
+        {label}
+      </span>
     );
   }
 
@@ -47,7 +50,7 @@ export function AmountWithHoverStat({
       className={`no-print relative inline-block group/amt ${className}`.trim()}
     >
       <span className="cursor-help border-b border-dotted border-[var(--text-muted)]/50">
-        {label}
+        <span className={`font-mono tabular-nums ${tone}`.trim()}>{label}</span>
       </span>
       <span
         role="tooltip"

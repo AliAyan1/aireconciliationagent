@@ -27,6 +27,7 @@ const teamLinks = [
 ];
 
 const adminLinks = [{ href: "/admin", label: "Analytics", key: "admin" as const }];
+const githubHref = process.env.NEXT_PUBLIC_GITHUB_URL ?? "https://github.com";
 
 function NavLink({
   href,
@@ -61,13 +62,13 @@ export function SiteHeader({ active, role, notifications }: SiteHeaderProps) {
 
   const navLinks = role === "ADMIN" ? adminLinks : role === "TEAM" ? teamLinks : [];
   const homeHref = role === "ADMIN" ? "/admin" : role === "TEAM" ? "/upload" : "/";
-  const ctaHref = role === "ADMIN" ? "/admin" : "/login?role=team";
+  const ctaHref = role === "ADMIN" ? "/admin" : "/upload";
   const ctaLabel =
     role === "ADMIN"
       ? "Analytics"
       : role === "TEAM"
         ? "Upload"
-        : "Sign in";
+        : "Get Started";
 
   useEffect(() => {
     if (!role) return;
@@ -118,7 +119,16 @@ export function SiteHeader({ active, role, notifications }: SiteHeaderProps) {
           ) : (
             <>
               <NavLink href="/" label="Home" active={active === "home"} />
-              <NavLink href="/login?role=team" label="Sign in" active={false} />
+              <NavLink href="/upload" label="Upload" active={active === "upload"} />
+              <NavLink href="/dashboard" label="Dashboard" active={active === "dashboard"} />
+              <a
+                href={githubHref}
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-lg px-3 py-1.5 text-sm font-medium transition-all duration-200 text-secondary hover:text-primary hover:bg-card-hover"
+              >
+                GitHub
+              </a>
             </>
           )}
         </nav>
@@ -197,12 +207,33 @@ export function SiteHeader({ active, role, notifications }: SiteHeaderProps) {
                 active={active === "home"}
                 onNavigate={() => setOpen(false)}
               />
+              <NavLink
+                href="/upload"
+                label="Upload"
+                active={active === "upload"}
+                onNavigate={() => setOpen(false)}
+              />
+              <NavLink
+                href="/dashboard"
+                label="Dashboard"
+                active={active === "dashboard"}
+                onNavigate={() => setOpen(false)}
+              />
+              <a
+                href={githubHref}
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-lg px-3 py-2 text-sm font-medium text-secondary hover:text-primary hover:bg-card-hover"
+                onClick={() => setOpen(false)}
+              >
+                GitHub
+              </a>
               <Link
-                href="/login?role=team"
+                href="/upload"
                 className="btn-primary mt-2 text-center py-2.5 text-sm"
                 onClick={() => setOpen(false)}
               >
-                Sign in
+                Get Started
               </Link>
             </>
           )}

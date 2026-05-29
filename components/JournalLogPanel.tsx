@@ -70,7 +70,11 @@ export function JournalLogPanel({ journalPosts }: JournalLogPanelProps) {
               {formatRelativeTime(j.postedAt, now)}
             </time>
             <p className="mt-1 text-sm text-primary">{j.narration}</p>
-            <p className="mt-0.5 text-xs text-secondary tabular-nums">
+            <p
+              className={`mt-0.5 text-xs font-mono tabular-nums ${
+                j.amount < 0 ? "text-[var(--danger)]" : "text-secondary"
+              }`}
+            >
               {formatPKR(j.amount)}
             </p>
           </li>

@@ -10,7 +10,7 @@ export function CtaSection() {
             <h2 className="text-2xl md:text-3xl font-bold text-primary">
               Ready to run HisaabAI?
             </h2>
-            <AnimatedBorderButton href="/login?role=team" className="mt-8">
+            <AnimatedBorderButton href="/upload" className="mt-8">
               Start Reconciliation →
             </AnimatedBorderButton>
           </div>
